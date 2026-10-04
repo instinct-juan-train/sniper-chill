@@ -89,15 +89,15 @@ export function buildMap(THREE) {
   const waterMat = new THREE.MeshBasicMaterial({ color: 0x4fc9ee }); mats.push(waterMat);
   const water = addMesh(new THREE.BoxGeometry(400, 1, 400), waterMat, 0, -2, 0, false);
   water.castShadow = false; water.name = 'water';
-  addMesh(new THREE.BoxGeometry(HALF * 2 + 4, 2, HALF * 2 + 4), mat(palette.sand), 0, -1, 0, false).name = 'beach';
+  addMesh(new THREE.BoxGeometry(HALF * 2 + 4, 2, HALF * 2 + 4), mat(palette.sand), 0, -1.06, 0, false).name = 'beach';
   const grassTex = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
     x.fillStyle = '#7fd08a'; x.fillRect(0, 0, 128, 128);
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 90; i++) { x.fillStyle = rnd() < 0.5 ? '#8fdc98' : '#6dc279'; const w = 6 + rnd() * 14; x.fillRect(rnd() * 128, rnd() * 128, w, w * 0.6); }
-    for (let i = 0; i < 40; i++) { x.fillStyle = '#5fb56d'; const px = rnd() * 128, py = rnd() * 128; x.fillRect(px, py, 2, 5); x.fillRect(px + 3, py + 1, 2, 4); }
-    x.strokeStyle = 'rgba(40,110,70,.18)'; x.lineWidth = 2; x.strokeRect(0, 0, 128, 128);
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(16, 16); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t;
+    for (let i = 0; i < 90; i++) { x.fillStyle = rnd() < 0.5 ? '#86d691' : '#76c982'; const w = 6 + rnd() * 14; x.fillRect(rnd() * 128, rnd() * 128, w, w * 0.6); }
+    for (let i = 0; i < 40; i++) { x.fillStyle = '#6dbf79'; const px = rnd() * 128, py = rnd() * 128; x.fillRect(px, py, 2, 5); x.fillRect(px + 3, py + 1, 2, 4); }
+    x.strokeStyle = 'rgba(40,110,70,0)'; x.lineWidth = 2; x.strokeRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 8); t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 16; t.generateMipmaps = true; t.colorSpace = THREE.SRGBColorSpace; return t;
   })();
   const groundMat = new THREE.MeshLambertMaterial({ map: grassTex }); mats.push(groundMat);
   addMesh(new THREE.BoxGeometry(HALF * 2, 0.4, HALF * 2), groundMat, 0, -0.2, 0, true).name = 'ground';
