@@ -113,7 +113,7 @@ export class Game {
     this.state = 'menu'; this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
     this.overlay(`<h2>Sniper Chill</h2><p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
-<p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> correr · <b>C</b> agacharte</p>
+<p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> agacharte</p>
 <p>Sniper: 1 tiro y muerto. Pistola y ametralladora: barra de vida, pero un tiro a la cabeza mata. Pulsa F para pantalla completa.</p>`,
       [['Bomba contra bots', () => this.start('bomb')], ['Reto diario (60 s, ranking)', () => this.start('daily'), true]]);
   }

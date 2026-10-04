@@ -104,10 +104,10 @@ export function createController(initialColliders=[], options={}) {
     const jumping=!!i.jump||held.has('Space');
     if(jumping&&!jumpHeld)jumpBuffer=.12;
     jumpHeld=jumping;
-    const wantsCrouch=!!i.crouch||held.has('ControlLeft')||held.has('ControlRight')||held.has('KeyC');
+    const wantsCrouch=!!i.crouch||held.has('ShiftLeft')||held.has('ShiftRight')||held.has('ControlLeft')||held.has('ControlRight')||held.has('KeyC');
     crouched=wantsCrouch||!clearAt(p.y,opt.height);
     height=crouched?opt.crouchHeight:opt.height;
-    const sprint=!!i.sprint||held.has('ShiftLeft')||held.has('ShiftRight');
+    const sprint=false; // no sprint: Shift = crouch
     const speed=crouched?opt.crouchSpeed:sprint?opt.sprintSpeed:opt.speed;
     const len=Math.max(1,Math.hypot(f,r));
     const tx=(-Math.sin(yaw)*f+Math.cos(yaw)*r)/len*speed;
