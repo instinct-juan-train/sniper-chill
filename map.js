@@ -86,18 +86,29 @@ export function buildMap(THREE) {
   function wallBox(x, z, w, d, h, color, name) { box(x, z, w, d, h, 0, color, name || 'wall'); }
 
   // ---------- base island ----------
-  const water = addMesh(new THREE.BoxGeometry(400, 1, 400), mat(palette.water, { transparent: true, opacity: 0.85 }), 0, -2, 0, false);
+  const waterMat = new THREE.MeshBasicMaterial({ color: 0x4fc9ee }); mats.push(waterMat);
+  const water = addMesh(new THREE.BoxGeometry(400, 1, 400), waterMat, 0, -2, 0, false);
   water.castShadow = false; water.name = 'water';
   addMesh(new THREE.BoxGeometry(HALF * 2 + 4, 2, HALF * 2 + 4), mat(palette.sand), 0, -1, 0, false).name = 'beach';
-  addMesh(new THREE.BoxGeometry(HALF * 2, 0.4, HALF * 2), mat(palette.grass), 0, -0.2, 0, true).name = 'ground';
+  const grassTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    x.fillStyle = '#7fd08a'; x.fillRect(0, 0, 128, 128);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 90; i++) { x.fillStyle = rnd() < 0.5 ? '#8fdc98' : '#6dc279'; const w = 6 + rnd() * 14; x.fillRect(rnd() * 128, rnd() * 128, w, w * 0.6); }
+    for (let i = 0; i < 40; i++) { x.fillStyle = '#5fb56d'; const px = rnd() * 128, py = rnd() * 128; x.fillRect(px, py, 2, 5); x.fillRect(px + 3, py + 1, 2, 4); }
+    x.strokeStyle = 'rgba(40,110,70,.18)'; x.lineWidth = 2; x.strokeRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(16, 16); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const groundMat = new THREE.MeshLambertMaterial({ map: grassTex }); mats.push(groundMat);
+  addMesh(new THREE.BoxGeometry(HALF * 2, 0.4, HALF * 2), groundMat, 0, -0.2, 0, true).name = 'ground';
   floors.push({ minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, y: 0 });
 
   // perimeter low walls (also colliders) with gaps nowhere: closed arena
   const P = HALF + 0.5;
-  box(0, -P, HALF * 2 + 2, 1, 3, 0, palette.wallC, 'edge');
-  box(0, P, HALF * 2 + 2, 1, 3, 0, palette.wallC, 'edge');
-  box(-P, 0, 1, HALF * 2 + 2, 3, 0, palette.wallC, 'edge');
-  box(P, 0, 1, HALF * 2 + 2, 3, 0, palette.wallC, 'edge');
+  box(0, -P, HALF * 2 + 2, 1, 3, 0, 0xfff0d8, 'edge');
+  box(0, P, HALF * 2 + 2, 1, 3, 0, 0xfff0d8, 'edge');
+  box(-P, 0, 1, HALF * 2 + 2, 3, 0, 0xfff0d8, 'edge');
+  box(P, 0, 1, HALF * 2 + 2, 3, 0, 0xfff0d8, 'edge');
 
   // ---------- centre rooftop "tower deck" (sniper perch) ----------
   platform(0, 0, 12, 12, ROOF, palette.roof);

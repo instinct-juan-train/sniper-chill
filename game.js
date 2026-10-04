@@ -77,9 +77,15 @@ export class Game {
     c.addEventListener('mousedown', (e) => {
       if (this.state !== 'play') return;
       if (!this.ctrl.state.pointerLocked) this.ctrl.requestPointerLock();
-      if (e.button === 0) this.ws.setTrigger(true); if (e.button === 2) this.ws.setAim(true); e.preventDefault();
+      if (e.button === 0) this.ws.setTrigger(true);
+      if (e.button === 2) { this.aimDownAt = performance.now(); if (this.ws.aiming) { this.ws.setAim(false); this.aimSkipUp = true; } else this.ws.setAim(true); }
+      e.preventDefault();
     });
-    d.addEventListener('mouseup', (e) => { if (e.button === 0) this.ws.setTrigger(false); if (e.button === 2) this.ws.setAim(false); });
+    d.addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.ws.setTrigger(false);
+      if (e.button === 2) { if (this.aimSkipUp) this.aimSkipUp = false; else if (performance.now() - this.aimDownAt > 350) this.ws.setAim(false); } // tap = toggle, hold = classic
+    });
+    d.addEventListener('keydown', (e) => { if (this.state === 'play' && e.code === 'KeyQ' && !e.repeat) this.ws.setAim(!this.ws.aiming); });
     d.addEventListener('wheel', (e) => { if (this.state === 'play') this.ws.cycle(e.deltaY > 0 ? 1 : -1); }, { passive: true });
     d.addEventListener('pointerlockchange', () => {
       const on = d.pointerLockElement === c;
@@ -125,7 +131,7 @@ export class Game {
     this.rng = mulberry(Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')));
     if (mode === 'bomb') {
       const ct = this.map.spawnPoints.filter((s) => s.team === 'CT');
-      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0 }));
+      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: i < 2 ? 'hard' : 'medium' }));
     }
     this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play';
     this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
@@ -147,6 +153,7 @@ export class Game {
   fireShots(shots) {
     const st = this.ctrl.state, o = { x: st.eye.x, y: st.eye.y, z: st.eye.z }, muzzle = new THREE.Vector3();
     this.vm.muzzleWorldPosition(muzzle);
+    if (shots.length && this.bots.noise) this.bots.noise(o.x, o.z, 55);
     for (const s of shots) {
       const yaw = st.yaw + s.dir.x, pit = st.pitch + s.dir.y, cp = Math.cos(pit);
       const dir = { x: -Math.sin(yaw) * cp, y: Math.sin(pit), z: -Math.cos(yaw) * cp };
@@ -192,7 +199,7 @@ export class Game {
     const self = this;
     const events = this.bots.update(dt, {
       playerEye: st.eye, playerAlive: this.player.alive,
-      bomb: { planted: this.bomb.planted, pos: this.bomb.pos, defuse(d) { self.bomb.defuseT += d; return self.bomb.defuseT >= 5; } },
+      bomb: { planted: this.bomb.planted, pos: this.bomb.pos, site: this.bomb.site, defuse(d) { self.bomb.defuseT += d; return self.bomb.defuseT >= 5; } },
     });
     for (const e of events) {
       if (e.type === 'shot') {

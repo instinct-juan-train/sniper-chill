@@ -6,8 +6,48 @@
 //        returns events [{type:'shot', from, to, hit:bool, damage}, {type:'defused'}]
 //   manager.damage(bot, newHealth, headshot)
 //   manager.aliveCount()
+import * as AI from './botsai.js';
 export function createBots(THREE, scene, map, opts) {
   const { raycast, colliders } = opts;
+  const useAI = !/[?&]ai=simple/.test(typeof location !== 'undefined' ? location.search : '');
+  // ---- specialist AI adapter (height-aware): map.navGrid for walls/paths/heights, game raycast for LOS
+  const ng = map.navGrid, aiList = [];
+  const wallData = new Uint8Array(ng.cols * ng.rows); for (let i = 0; i < wallData.length; i++) wallData[i] = ng.walkable[i] ? 0 : 1;
+  const grid = AI.makeGrid(ng.cols, ng.rows, ng.cellSize, wallData, ng.originX, ng.originZ);
+  grid.heightAt = (x, z) => { const h = map.getHeight(x, z); return isFinite(h) ? h : NaN; };
+  grid.stepMax = Math.max(0.7, (map.stepHeight || 0.5) + 0.25);
+  grid.customPath = (ax, az, bx, bz) => {
+    const p = ng.findPath(new THREE.Vector3(ax, grid.heightAt(ax, az), az), new THREE.Vector3(bx, grid.heightAt(bx, bz), bz));
+    return p && p.length ? p.map((v) => ({ x: v.x, z: v.z })) : null;
+  };
+  const aiEvents = []; let lastEnv = null;
+  const aiWorld = {
+    grid, attackTeam: 'T', sites: ['A', 'B'].filter((k) => map.bombsites && map.bombsites[k]).map((k) => ({ id: k, x: map.bombsites[k].center.x, z: map.bombsites[k].center.z, r: map.bombsites[k].radius })),
+    bomb: { state: 'carried', carrierId: 'player' }, players: [{ id: 'player', team: 'T', alive: true, x: 0, y: 0, z: 0, _spd: 0 }],
+    los(bot, e) {
+      const a = { x: bot.x, y: bot.y + 1.6, z: bot.z }, ey = (e.y || 0) + 1.2, dx = e.x - a.x, dy = ey - a.y, dz = e.z - a.z, d = Math.hypot(dx, dy, dz);
+      return !raycast(a, { x: dx, y: dy, z: dz }, { colliders, maxDistance: Math.max(0.1, d - 0.3) });
+    },
+    shoot(bot, o, dir, wname) {
+      const W = AI.WEAPONS[wname], range = (W.range || 40) * 1.6, pl = aiWorld.players[0];
+      const wh = raycast(o, dir, { colliders, maxDistance: range });
+      const wd = wh ? Math.hypot(wh.point.x - o.x, wh.point.y - o.y, wh.point.z - o.z) : range;
+      let hit = false;
+      if (pl.alive) {
+        const cx = pl.x - o.x, cy = pl.y + 0.9 - o.y, cz = pl.z - o.z, t = cx * dir.x + cy * dir.y + cz * dir.z;
+        if (t > 0 && t < wd) {
+          const qx = o.x + dir.x * t, qy = o.y + dir.y * t, qz = o.z + dir.z * t;
+          hit = Math.hypot(qx - pl.x, qz - pl.z) < 0.4 && qy > pl.y && qy < pl.y + 1.85;
+        }
+      }
+      const end = hit && lastEnv ? lastEnv.playerEye : (wh ? wh.point : { x: o.x + dir.x * range, y: o.y + dir.y * range, z: o.z + dir.z * range });
+      aiEvents.push({ type: 'shot', from: V(o.x, o.y - 0.1, o.z), to: V(end.x, end.y, end.z), hit, damage: Math.max(6, Math.round(W.dmg * (wname === 'sniper' ? 0.5 : 0.55))) });
+      return { hit };
+    },
+    plant() {}, pickupBomb() {},
+    defuse() { aiEvents.push({ type: 'defused' }); },
+  };
+  function noise(x, z, r) { AI.emitSound(aiList, x, z, r, 'T'); }
   const list = [];
   let nextId = 1;
   const palette = [0xe85d75, 0xf2a65a, 0x6c8cff, 0x8e6cf0, 0x3fb68b];
@@ -43,10 +83,22 @@ export function createBots(THREE, scene, map, opts) {
       health: 100, alive: true, defuser: !!o.defuser, path: [], pathT: Math.random(), seen: 0,
       shootT: 1 + Math.random(), yaw: 0, flash: 0, deadT: 0, defuseT: 0, speedMul: 0.85 + Math.random() * 0.3,
     };
+    if (useAI && o.pro) {
+      const ai = AI.createBot({ id: b.id, team: 'CT', difficulty: o.difficulty || 'medium', x: pos.x, y: pos.y, z: pos.z, yaw: Math.random() * 6.28 });
+      Object.assign(ai, { group, bodyMat, baseColor: col, bar, height: 1.8, flash: 0, deadT: 0, pro: true, defuser: !!o.defuser });
+      ai.position = ai;
+      Object.defineProperty(ai, 'health', { get() { return ai.hp; } });
+      if (!aiList.length) AI.newRound(aiWorld);
+      aiList.push(ai); list.push(ai); return ai;
+    }
     list.push(b); return b;
   }
-  function clear() { for (const b of list) scene.remove(b.group); list.length = 0; }
+  function clear() { for (const b of list) scene.remove(b.group); list.length = 0; aiList.length = 0; AI.newRound(aiWorld); }
   function damage(b, newHealth, head) {
+    if (b.pro) {
+      const dmg = b.hp - newHealth; AI.damageBot(b, dmg, lastEnv ? lastEnv.playerEye.x : b.x, lastEnv ? lastEnv.playerEye.z : b.z, !!head);
+      b.bar.draw(Math.max(0, b.hp) / 100); b.flash = 0.12; if (!b.alive) { b.deadT = 0; b.bar.spr.visible = false; } return;
+    }
     b.health = newHealth; b.bar.draw(Math.max(0, newHealth) / 100); b.flash = 0.12;
     if (newHealth <= 0) { b.alive = false; b.deadT = 0; b.bar.spr.visible = false; }
   }
@@ -70,7 +122,19 @@ export function createBots(THREE, scene, map, opts) {
 
   function update(dt, env) {
     const events = [];
+    if (aiList.length && dt > 0) {
+      lastEnv = env; const pl = aiWorld.players[0];
+      pl.alive = !!env.playerAlive; pl.x = env.playerEye.x; pl.z = env.playerEye.z; pl.y = env.playerEye.y - 1.6;
+      const bo = env.bomb;
+      aiWorld.bomb = bo && bo.planted ? { state: 'planted', x: bo.pos.x, z: bo.pos.z, site: bo.site || 'A', timeLeft: 30 } : { state: 'carried', carrierId: 'player' };
+      aiEvents.length = 0;
+      if (!aiWorld.defuseOk) aiWorld.defuseOk = true;
+      try { AI.update(aiList, dt, aiWorld); } catch (err) { console.error('AI error', err); }
+      for (const b of aiList) if (b.alive) { const h = grid.heightAt(b.x, b.z); if (isFinite(h)) b.y += (h - b.y) * Math.min(1, dt * 12); }
+      for (const e of aiEvents) { if (e.type === 'defused') { if (bo && bo.defuse && bo.defuse(5)) events.push(e); } else events.push(e); }
+    }
     for (const b of list) {
+      if (b.pro && b.alive) { b.flash = Math.max(0, b.flash - dt); b.bodyMat.emissive.setHex(b.flash > 0 ? 0xffffff : 0); b.group.position.set(b.x, b.y, b.z); b.group.rotation.y = b.yaw; continue; }
       if (!b.alive) {
         b.deadT += dt; b.group.rotation.x = -Math.min(Math.PI / 2, b.deadT * 4);
         if (b.deadT > 4) b.group.visible = false;
@@ -116,5 +180,5 @@ export function createBots(THREE, scene, map, opts) {
     }
     return events;
   }
-  return { list, spawn, clear, update, damage, aliveCount };
+  return { list, spawn, clear, update, damage, aliveCount, noise, useAI };
 }
