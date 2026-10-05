@@ -10,6 +10,7 @@ import * as AI from './botsai.js';
 import { createCharacter, CHARACTER_IDS } from './characters.js';
 export function createBots(THREE, scene, map, opts) {
   const { raycast, colliders } = opts;
+  let smokeLOS = () => false;
   const useAI = !/[?&]ai=simple/.test(typeof location !== 'undefined' ? location.search : '');
   // ---- specialist AI adapter (height-aware): map.navGrid for walls/paths/heights, game raycast for LOS
   const ng = map.navGrid, aiList = [];
@@ -27,9 +28,11 @@ export function createBots(THREE, scene, map, opts) {
     bomb: { state: 'carried', carrierId: 'player' }, players: [{ id: 'player', team: 'T', alive: true, x: 0, y: 0, z: 0, _spd: 0 }],
     los(bot, e) {
       const a = { x: bot.x, y: bot.y + 1.6, z: bot.z }, ey = (e.y || 0) + 1.2, dx = e.x - a.x, dy = ey - a.y, dz = e.z - a.z, d = Math.hypot(dx, dy, dz);
+      if (smokeLOS(a, { x: e.x, y: ey, z: e.z }) || bot.grenadeFlash > 0) return false;
       return !raycast(a, { x: dx, y: dy, z: dz }, { colliders, maxDistance: Math.max(0.1, d - 0.3) });
     },
     shoot(bot, o, dir, wname) {
+      if (bot.grenadeFlash > 0) return { hit: false };
       const W = AI.WEAPONS[wname], range = (W.range || 40) * 1.6, pl = aiWorld.players[0];
       const wh = raycast(o, dir, { colliders, maxDistance: range });
       const wd = wh ? Math.hypot(wh.point.x - o.x, wh.point.y - o.y, wh.point.z - o.z) : range;
@@ -134,6 +137,7 @@ export function createBots(THREE, scene, map, opts) {
     b.ch.update(dt, { speed, aiming, pitch, reloading, weapon: weapon === 'machinegun' || weapon === 'pistol' || weapon === 'sniper' ? weapon : undefined, alive: true, distance: lastEnv && lastEnv.playerEye ? Math.hypot(lastEnv.playerEye.x - x, lastEnv.playerEye.z - z) : undefined });
   }
   function update(dt, env) {
+    for (const b of list) b.grenadeFlash = Math.max(0, (b.grenadeFlash || 0) - dt);
     const events = [];
     if (aiList.length && dt > 0) {
       lastEnv = env; const pl = aiWorld.players[0];
@@ -158,7 +162,7 @@ export function createBots(THREE, scene, map, opts) {
       let sees = false, dist = 999, dx = 0, dy = 0, dz = 0;
       if (env.playerAlive) {
         dx = env.playerEye.x - eye.x; dy = env.playerEye.y - eye.y; dz = env.playerEye.z - eye.z; dist = Math.hypot(dx, dy, dz);
-        if (dist < 50) sees = !raycast(eye, { x: dx, y: dy, z: dz }, { colliders, maxDistance: dist - 0.3 });
+        if (dist < 50 && !b.grenadeFlash && !smokeLOS(eye, env.playerEye)) sees = !raycast(eye, { x: dx, y: dy, z: dz }, { colliders, maxDistance: dist - 0.3 });
       }
       b.seen = sees ? b.seen + dt : Math.max(0, b.seen - dt * 0.5);
       b.pathT -= dt;
@@ -194,5 +198,11 @@ export function createBots(THREE, scene, map, opts) {
     }
     return events;
   }
-  return { list, spawn, clear, update, damage, aliveCount, noise, useAI };
+  function refreshNavigation() {
+    for (let i = 0; i < wallData.length; i++) wallData[i] = ng.walkable[i] ? 0 : 1;
+    AI.invalidateNav(grid);
+    for (const b of list) { b.path = []; b.pathT = 0; }
+  }
+  return { list, spawn, clear, update, damage, aliveCount, noise, useAI,
+    refreshNavigation, set smokeLOS(fn) { smokeLOS = fn; } };
 }

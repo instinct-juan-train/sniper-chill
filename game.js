@@ -14,6 +14,8 @@ import { getContext } from './audio.js';
 import { DIFFICULTY } from './botsai.js';
 import { createStreaks } from './streaks.js';
 import { createEconomy, WEAPON_STATS } from './economy.js';
+import { createDestruction } from './destruction.js';
+import { createGrenades } from './grenades.js';
 
 const CSS = `
 .sg{font-family:system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
@@ -50,6 +52,9 @@ export class Game {
     this.phys = phys;
     this.world = [...phys, { min: { x: -40, y: -2, z: -40 }, max: { x: 40, y: 0, z: 40 } }]; // ground also stops bullets
 
+    this.destruction = createDestruction(THREE, { scene: this.scene, map: m,
+      colliderArrays: [this.phys, this.world], onCollidersChanged: () => this.bots?.refreshNavigation?.() });
+
     const spawnT = m.spawnPoints.filter((s) => s.team === 'T')[0];
     this.spawnT = spawnT.position.clone();
     this.ctrl = createController(this.phys, { position: { x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, yaw: 0 });
@@ -68,6 +73,15 @@ export class Game {
     this.streaks = createStreaks({ THREE, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
       isPlaying: () => this.state === 'play',
       onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Racha: baja +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
+    this.streaks.on('explosion', ({ position, radius, source }) => this.destruction.damage(position, radius, source === 'rc' ? 150 : 200, { source }));
+    this.grenades = createGrenades(THREE, { scene: this.scene, map: m, colliders: this.world,
+      raycast, destruction: this.destruction, getTargets: () => this.bots.list,
+      onDamage: (b, amount) => { const alive = b.alive; this.bots.damage(b, Math.max(0, b.health - amount), false);
+        if (alive && !b.alive) { this.eco.recordKill({ id: b.id, weapon: 'frag' }); this.streaks.registerKill({ headshot: false }); this.kills++; this.score += 100; } },
+      onFlash: (b, seconds) => { b.grenadeFlash = Math.max(b.grenadeFlash || 0, seconds); }
+    });
+    this.bots.smokeLOS = (a, b) => this.grenades.blocksSight(a, b);
+    this.bots.refreshNavigation?.();
     this.streaks.show(false);
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
@@ -122,10 +136,17 @@ export class Game {
       if (e.code === 'Escape') { this.pause(); return; }
       if (this.eco && this.eco.getState().menuOpen) return;
       if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary');
+      if (!e.repeat && ['KeyV', 'KeyH', 'KeyJ'].includes(e.code)) { this.throwGrenade({ KeyV: 'frag', KeyH: 'smoke', KeyJ: 'flash' }[e.code]); return; }
       else if (e.code === 'KeyR') this.ws.reload(); else if (e.code === 'KeyE') { this.eDown = true; if (!e.repeat) this.tryPickup(); }
     });
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
   }
+  throwGrenade(type) {
+    const s = this.eco.getState();
+    if (this.state !== 'play' || s.phase !== 'live' || s.menuOpen || !this.player.alive || this.streaks.controlling) return;
+    this.grenades.throwGrenade(type, { position: this.ctrl.state.eye, direction: this.ctrl.getDirection(), owner: 'player', team: s.team });
+  }
+  endMatchEffects(id) { this.destruction.reset(id); this.grenades.reset(id); }
   onWeaponEvent(n, d) {
     const map = { pistol: 'shot_pistol', machinegun: 'shot_mg', sniper: 'shot_sniper' };
     if (n === 'shot') play(map[d.weapon]); else if (n === 'empty') { play('empty'); this.anim.onEmpty(); } else if (n === 'reload') { play('reload'); this.anim.onReload(); } else if (n === 'switch') { play('ui_click'); this.anim.onSwitch(); }
@@ -133,7 +154,9 @@ export class Game {
   newEconomy() {
     if (this.eco) { try { this.eco.dispose(); } catch (e) {} }
     this.owned = new Set(['pistol']);
+    this.grenades?.clearRound();
     this.eco = createEconomy({ container: this.root, team: 'T', freezeTime: 10, autoOpen: false, inZone: () => this.inBuyZone(), onEvent: (n, d) => this.onEco(n, d) });
+    if (this.grenades) this.grenades.setEconomy(this.eco);
   }
   syncAmmoToEco() { if (!this.eco) return; for (const id of ['pistol', 'machinegun', 'sniper']) { const a = this.ws.ammo[id]; if (a && this.eco.getState().inventory.ammo[id]) this.eco.setAmmo(id, { mag: a.mag, reserve: a.reserve }); } }
   onEco(n, d) {
@@ -200,7 +223,7 @@ export class Game {
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
     this.overlay(`<h2>Sniper Chill</h2><p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
 <p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> agacharte</p>
-<p><b>Rachas:</b> 3 bajas = UAV (<b>4</b>) · 5 = misil (<b>5</b>) · 7 = coche RC bomba (<b>6</b>) · 9 = ataque aéreo (<b>7</b>). <b>G</b> usa la primera. Si mueres pierdes la racha.</p>
+<p><b>Rachas:</b> 3 bajas = UAV (<b>4</b>) · 5 = misil (<b>5</b>) · 7 = coche RC bomba (<b>6</b>) · 9 = ataque aéreo (<b>7</b>). <b>G</b> usa la primera. Granadas: <b>V</b> frag, <b>H</b> humo, <b>J</b> flash. Si mueres pierdes la racha.</p>
 <p>Sniper: 1 tiro y muerto. Pistola y ametralladora: barra de vida, pero un tiro a la cabeza mata. Pulsa F para pantalla completa.</p>`,
       [['Jugar contra bots', () => this.start('bomb')]]);
   }
@@ -211,7 +234,8 @@ export class Game {
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode, cont = false) {
-    if (!cont || !this.eco || this.match.over) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; }
+    if (!cont || !this.eco || this.match.over) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
+    this.grenades.clearRound();
     if (cont && this.match.round < 5) this.match.round++;
     this.mode = mode; this.killfx.reset(); this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
@@ -250,6 +274,7 @@ export class Game {
       const dir = { x: -Math.sin(yaw) * cp, y: Math.sin(pit), z: -Math.cos(yaw) * cp };
       const hit = raycast(o, dir, { colliders: this.world, targets: this.bots.list, maxDistance: s.range });
       const end = hit ? hit.point : { x: o.x + dir.x * s.range, y: o.y + dir.y * s.range, z: o.z + dir.z * s.range };
+      if (hit?.kind === 'world') this.destruction.damageHit(hit, WEAPON_STATS[s.weapon]?.damage.body || 30);
       this.anim.onShot({ weapon: s.weapon, end, hit });
       let kh = hit ? (hit.kind === 'target' ? null : { kind: 'world', normal: hit.normal }) : null;
       if (hit && hit.kind === 'target') {
@@ -362,7 +387,7 @@ export class Game {
     const dt = real * this.kc.update(real) * this.killfx.update(real);
     if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
-    if (this.state === 'play') this.update(dt);
+    if (this.state === 'play') { this.destruction.update(dt); const es = this.eco.getState(); if (es.phase === 'live' && !es.menuOpen) this.grenades.update(dt); this.update(dt); }
     else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); this.anim.update(dt, { bots: [] }); }
     this.kc.applyCamera(); this.killfx.applyCamera(this.camera);
     if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
