@@ -1,4 +1,5 @@
 // menu.js - ChillOps main menu (Black Ops style layout): modes left, section content center, player right.
+import { getStats, shareCard, shareText, rank, favDiff } from './stats.js';
 import { logoHTML, startConfetti } from './intro.js';
 const CSS = `
 .mn{position:absolute;inset:0;z-index:1;font-family:Fredoka,system-ui,sans-serif;color:#fff;text-align:left;box-sizing:border-box}
@@ -54,7 +55,7 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const items = [
     { t: 'Play vs bots', a: () => game.start('bomb') },
     { t: 'Multiplayer', a: () => game.openMP() }, { gap: 1 },
-    { t: 'Difficulty', diff: 1, a: () => cycleDiff() }, { t: 'How to play', a: () => game.tutorial() }, { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
+    { t: 'Difficulty', diff: 1, a: () => cycleDiff() }, { t: 'How to play', a: () => game.tutorial() }, { t: 'Profile', p: 'profile' }, { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
   ];
   el.innerHTML = `<div class="mn-char"><canvas style="width:100%;height:100%"></canvas></div><div class="mn-logo"><div class="chl">${logoHTML()}</div></div><div class="mn-list"></div><div class="mn-pan"></div>
 <div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">LEVEL 1</div></div>
@@ -65,6 +66,8 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
     if (!/[?&]nostats/.test(location.search)) load(); }
   const list = el.querySelector('.mn-list'), pan = el.querySelector('.mn-pan'); let sel = 0; const btns = [];
   const panels = {
+    profile: () => { const s = getStats(), nm = String(name).replace(/[<>&"]/g, ""), card = shareCard(s, nm), txt = shareText(s, nm);
+      return `<h3>PROFILE</h3><p style="margin:2px 0 8px;font-size:20px;font-weight:700">${nm} <span style="color:#ffb347;font-size:14px;letter-spacing:.12em">${rank(s).toUpperCase()}</span></p><p style="font-size:12px;opacity:.7;margin:0 0 10px">Saved on this device only. No account, no personal data.</p><div class="mn-keys"><div><b>${s.kills}</b> kills</div><div><b>${s.heads}</b> headshots</div><div><b>${s.roundsWon}/${s.rounds}</b> rounds won</div><div><b>${s.matchesWon}/${s.matches}</b> matches won</div><div><b>${s.bestRoundKills}</b> best round kills</div><div><b>${favDiff(s) || '-'}</b> favourite level</div></div><img alt="Share card" src="${card}" style="width:78%;margin-top:12px;border-radius:10px"><p style="font-size:13px;margin-top:8px"><a style="color:#ffe9a8" download="chillops-card.png" href="${card}">Download card</a> &nbsp;·&nbsp; <a style="color:#ffe9a8" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(txt)}">Post on X</a></p>`; },
     streaks: () => `<h3>STREAKS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} KILLS · KEY ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G uses the first one. You lose your streak if you die; surviving the round keeps it.</p>`,
     help: () => `<h3>CONTROLS</h3><div class="mn-keys">${[['WASD', 'Move'], ['Mouse', 'Aim'], ['Click', 'Shoot'], ['Right click', 'Scope'], ['Shift', 'Crouch'], ['Space', 'Jump'], ['R', 'Reload'], ['E', 'Pick up / plant'], ['B', 'Shop'], ['1 2 3', 'Weapons / knife'], ['V H J', 'Grenades'], ['G', 'Use streak'], ['Esc', 'Pause']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
   };

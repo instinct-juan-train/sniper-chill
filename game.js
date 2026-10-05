@@ -15,6 +15,7 @@ import { DIFFICULTY } from './botsai.js';
 import { createStreaks } from './streaks.js';
 import { addDecor } from './decor.js';
 import { addAds } from './ads.js';
+import { recordRound } from './stats.js';
 import { createEconomy, WEAPON_STATS } from './economy.js';
 import { createDestruction } from './destruction.js';
 import { createGrenades } from './grenades.js';
@@ -449,7 +450,7 @@ export class Game {
     this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
   end(win, msg) {
-    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; play(win ? 'round_win' : 'round_lose'); if (win) this.match.p++; else this.match.b++; this.renderSB(); this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; play(win ? 'round_win' : 'round_lose'); if (win) this.match.p++; else this.match.b++; this.renderSB(); try { recordRound(this, win); } catch (e) {} this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
