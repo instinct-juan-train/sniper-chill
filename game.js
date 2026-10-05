@@ -51,7 +51,7 @@ const CSS = `
 .sg .invb .it.empty{opacity:.4}
 .sg .invb .it.gr{background:rgba(54,98,150,.6)}
 .sg .invb .sep{height:4px}
-.sg .invh{position:absolute;right:24px;bottom:176px;z-index:22;font-weight:600;font-size:12px;color:#ffe9a8;text-shadow:0 1px 3px #000;pointer-events:none;opacity:0;transition:opacity .3s;text-align:right}
+.sg .invh{position:absolute;right:128px;bottom:140px;max-width:240px;z-index:22;font-weight:600;font-size:12px;color:#ffe9a8;text-shadow:0 1px 3px #000;pointer-events:none;opacity:0;transition:opacity .3s;text-align:right}
 .sg .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(20,30,45,.74);text-align:center;padding:16px;z-index:100}
 .sg .ov h2{margin:0;font-size:clamp(24px,4.5vw,44px)}
 .sg .ov p{margin:0;font-size:clamp(12px,1.6vw,16px);opacity:.92;max-width:680px;line-height:1.45}
@@ -177,13 +177,20 @@ export class Game {
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
   }
   makeKnife() {
-    const k = new THREE.Group(), mat = (c) => new THREE.MeshToonMaterial({ color: c });
-    const bx = (w, h, d, c, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y, z); k.add(m); return m; };
-    bx(0.022, 0.07, 0.3, 0xe8f4ff, 0, 0.012, -0.2); bx(0.026, 0.012, 0.3, 0xffffff, 0, 0.05, -0.2); // blade + spine
-    bx(0.07, 0.02, 0.025, 0xffb347, 0, -0.02, -0.04); bx(0.035, 0.04, 0.13, 0xff7a3c, 0, -0.03, 0.03); // guard + handle
-    bx(0.055, 0.05, 0.08, 0xf2c9a0, 0, -0.03, 0.02); bx(0.06, 0.05, 0.14, 0x2a6fd6, 0.0, -0.03, 0.14); // hand + sleeve
+    const k = new THREE.Group(), mat = (c) => new THREE.MeshToonMaterial({ color: c }); this.kn = {};
+    const bx = (name, w, h, d, c, x, y, z, rz = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y, z); m.rotation.z = rz; k.add(m); this.kn[name] = m; return m; };
+    bx('blade', 0.022, 0.07, 0.24, 0xe8f4ff, 0, 0.012, -0.2); bx('tip', 0.02, 0.05, 0.08, 0xe8f4ff, 0, 0.0, -0.36); this.kn.tip.rotation.x = 0.35; bx('spine', 0.026, 0.012, 0.3, 0xffffff, 0, 0.05, -0.22);
+    bx('guard', 0.07, 0.02, 0.025, 0xffb347, 0, -0.02, -0.04); bx('kite', 0.06, 0.06, 0.012, 0xffb347, 0, -0.02, -0.07, Math.PI / 4);
+    bx('handle', 0.035, 0.04, 0.13, 0xff7a3c, 0, -0.03, 0.03);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 14), mat(0xffb347)); ring.position.set(0, -0.03, 0.11); k.add(ring); this.kn.ring = ring;
+    bx('hand', 0.055, 0.05, 0.08, 0xf2c9a0, 0, -0.03, 0.02); bx('sleeve', 0.06, 0.05, 0.14, 0x2a6fd6, 0.0, -0.03, 0.14);
     k.visible = false; k.userData.home = new THREE.Vector3(0.2, -0.2, -0.36); k.position.copy(k.userData.home); k.rotation.set(0.1, 0.15, 0);
-    this.camera.add(k); this.knife = k;
+    this.camera.add(k); this.knife = k; this.knSkin = false;
+  }
+  applyKnifeSkin(on) {
+    if (on === this.knSkin) return; this.knSkin = on; const K = this.kn, c = (m, h) => m.material.color.set(h);
+    if (on) { c(K.blade, 0xff9ac8); c(K.tip, 0x9ad1ff); c(K.spine, 0xffffff); c(K.guard, 0xffd166); c(K.kite, 0x7dffb0); c(K.handle, 0x8f5cff); c(K.ring, 0xffd166); K.blade.scale.set(1.15, 1, 1); }
+    else { c(K.blade, 0xe8f4ff); c(K.tip, 0xe8f4ff); c(K.spine, 0xffffff); c(K.guard, 0xffb347); c(K.kite, 0xffb347); c(K.handle, 0xff7a3c); c(K.ring, 0xffb347); K.blade.scale.set(1, 1, 1); }
   }
   toggleKnife() { if (this.knifeOn) { const inv = this.eco.getState().inventory; this.pick('primary'); if (this.knifeOn) this.unKnife(); return; } this.ws.setTrigger(false); this.ws.setAim(false); this.knifeOn = true; this.vm.group.visible = false; this.knife.visible = true; this.slashT = -1; play('ui_click'); }
   unKnife() { if (!this.knifeOn) return; this.knifeOn = false; this.knife.visible = false; this.vm.group.visible = true; }
@@ -212,7 +219,8 @@ export class Game {
   }
   updateKnife(dt) {
     if (this.knifeCd > 0) this.knifeCd -= dt;
-    const k = this.knife; if (!k.visible) return; const h = k.userData.home;
+    const k = this.knife; if (!k.visible) return; const h = k.userData.home; this.applyKnifeSkin(!!this.eco.getState().inventory.knifeskin);
+    if (this.knSkin) { const hue = (performance.now() / 2500) % 1; this.kn.blade.material.color.setHSL(0.9 - 0.3 * Math.abs(Math.sin(hue * 6.28)), 0.8, 0.78); }
     if (this.slashT >= 0) { this.slashT += dt; const t = Math.min(1, this.slashT / 0.3), e = Math.sin(t * Math.PI);
       k.position.set(h.x - 0.38 * t + 0.1 * e, h.y + 0.1 * e - 0.05 * t, h.z - 0.12 * e); k.rotation.set(0.1 - 0.9 * e, 0.15 + 1.2 * t, -0.9 * e + 0.5 * t); if (t >= 1) this.slashT = -1; }
     else { const b = Math.sin(performance.now() / 600) * 0.004; k.position.set(h.x, h.y + b, h.z); k.rotation.set(0.1, 0.15, 0); }
@@ -225,7 +233,7 @@ export class Game {
     let h = '';
     h += inv.primary ? it('1', nm(inv.primary), '', cur === inv.primary) : it('1', 'Principal', 'vacío', false, ' empty');
     h += it('2', nm(inv.secondary || 'pistol'), '', cur === (inv.secondary || 'pistol'));
-    h += it('3', 'Cuchillo', '', cur === 'knife');
+    h += it('3', inv.knifeskin ? 'Kite Cutter' : 'Cuchillo', '', cur === 'knife');
     const gl = [['V', 'frag', 'Frag'], ['H', 'smoke', 'Humo'], ['J', 'flash', 'Flash']].filter(([, id]) => gr[id] > 0);
     if (gl.length) { h += '<div class="sep"></div>'; for (const [k, id, lab] of gl) h += it(k, lab, '×' + gr[id], false, ' gr'); }
     this.invb.innerHTML = h;
@@ -253,6 +261,7 @@ export class Game {
       if (d.open) { this.syncAmmoToEco(); this.ws.setTrigger(false); this.eDown = false; this.ctrl.exitPointerLock(); }
       else if (this.state === 'play') { try { this.ctrl.requestPointerLock(); } catch (e) {} }
     } else if (n === 'inventory' || n === 'equip' || n === 'purchase') {
+      if (n === 'purchase' && d && ['frag', 'smoke', 'flash'].includes(d.id)) { const k = { frag: 'V', smoke: 'H', flash: 'J' }[d.id]; this.invh.textContent = `Granada lista: pulsa ${k} para lanzarla (cuando acabe la fase de compra)`; this.invh.style.opacity = 1; clearTimeout(this.invhT); this.invhT = setTimeout(() => { this.invh.style.opacity = 0; }, 7000); }
       const s = d.state, inv = s.inventory;
       for (const id of [inv.primary, inv.secondary]) { if (id && !this.owned.has(id)) { this.owned.add(id); const a = inv.ammo[id]; if (a) { this.ws.ammo[id].mag = a.mag; this.ws.ammo[id].reserve = a.reserve; } } }
       for (const id of Array.from(this.owned)) if (id !== inv.primary && id !== inv.secondary) this.owned.delete(id);
