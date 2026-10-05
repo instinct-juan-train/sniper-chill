@@ -1,0 +1,179 @@
+// mp.js - multiplayer lobby, wake screen and in-match client (uses net.js / common.js)
+import { NetClient } from './net.js';
+import { createController } from './movement.js';
+import { createCharacter, CHARACTER_IDS } from './characters.js';
+import { WEAPON_ORDER } from './player.js';
+
+const HOST = 'sniper-chill-mp.onrender.com';
+const TH = (/[?&]mphost=([\w.:-]+)/.exec(location.search) || [])[1];
+const WS = TH ? 'ws://' + TH + '/ws' : 'wss://' + HOST + '/ws', HEALTH = TH ? 'http://' + TH + '/healthz' : 'https://' + HOST + '/healthz';
+const CSS = `
+.mp{position:absolute;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(30,60,80,.82),rgba(6,12,20,.96));font-family:Fredoka,system-ui,sans-serif;color:#fff}
+.mp-card{width:min(440px,90vw);padding:26px 28px;border-radius:18px;background:rgba(10,18,28,.78);border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.mp-card h2{margin:0 0 4px;font-size:26px;letter-spacing:.12em;font-weight:600}.mp-card p{margin:6px 0 14px;opacity:.7;font-size:14px}
+.mp-card label{display:block;font-size:11px;letter-spacing:.16em;opacity:.6;margin:12px 0 5px}
+.mp-card input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:16px;outline:none}
+.mp-card input:focus{border-color:#7fe3ff}
+.mp-row{display:flex;gap:10px;margin-top:14px}.mp-btn{flex:1;padding:12px;border-radius:10px;border:0;background:#7fe3ff;color:#06202c;font:inherit;font-weight:600;font-size:15px;letter-spacing:.06em;cursor:pointer}
+.mp-btn.alt{background:rgba(255,255,255,.1);color:#fff}.mp-btn:hover{filter:brightness(1.1)}
+.mp-spin{width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:#7fe3ff;margin:6px auto 16px;animation:mpsp 1s linear infinite}@keyframes mpsp{to{transform:rotate(360deg)}}
+.mp-c{text-align:center}.mp-code{font-size:30px;letter-spacing:.3em;font-weight:600;color:#7fe3ff;margin:6px 0}
+.mp-hud{position:absolute;inset:0;z-index:25;pointer-events:none;font-family:Fredoka,system-ui,sans-serif;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.mp-hud .top{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center}
+.mp-hud .sc{font-size:30px;font-weight:600;letter-spacing:.08em}.mp-hud .sc b:first-child{color:#ffb347}.mp-hud .sc b:last-child{color:#7fe3ff}
+.mp-hud .ph{font-size:13px;opacity:.85;letter-spacing:.14em}
+.mp-hud .hp{position:absolute;left:28px;bottom:26px;font-size:34px;font-weight:600}.mp-hud .am{position:absolute;right:28px;bottom:44px;font-size:34px;font-weight:600}.mp-hud .am small{font-size:16px;opacity:.7}
+.mp-hud .net{position:absolute;right:14px;bottom:8px;font-size:11px;opacity:.65}
+.mp-hud .msg{position:absolute;top:34%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:600;letter-spacing:.1em;text-align:center}
+.mp-hud .rc{position:absolute;left:14px;top:12px;font-size:12px;opacity:.7;letter-spacing:.12em}
+.mp-hud .cr{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.mp-hud .tag{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:600;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.4);white-space:nowrap}
+`;
+const el = (h, c) => { const d = document.createElement('div'); if (c) d.className = c; if (h != null) d.innerHTML = h; return d; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+export function createMultiplayer(game, THREE) {
+  if (!document.getElementById('mp-css')) { const s = document.createElement('style'); s.id = 'mp-css'; s.textContent = CSS; document.head.appendChild(s); }
+  const root = game.root;
+  const mp = { active: false, net: null };
+  let screen = null, hud = null, remotes = new Map(), keys = {}, locked = false, wakeTimer = null, wakeStop = false, mode = '1v1', binds = [], lastMsg = '', msgT = 0;
+  const getName = () => { try { return localStorage.getItem('sc_name') || ''; } catch (e) { return ''; } };
+  const setName = (n) => { try { localStorage.setItem('sc_name', n); } catch (e) {} };
+  const clear = () => { if (screen) { screen.remove(); screen = null; } };
+  const show = (html) => { clear(); screen = el(`<div class="mp-card">${html}</div>`, 'mp'); root.appendChild(screen); return screen; };
+
+  function lobby(preset) {
+    const s = show(`<h2>MULTIPLAYER</h2><p>Bomb mode. Plant or defuse, first to 5 rounds.</p>
+<label>YOUR NAME</label><input id="mpn" maxlength="14" value="${esc(getName())}" placeholder="Player">
+<label>MODE</label><div class="mp-row" style="margin-top:0"><button class="mp-btn" id="m1">1v1</button><button class="mp-btn alt" id="m2">2v2</button></div>
+<div class="mp-row"><button class="mp-btn" id="mpc">CREATE ROOM</button></div>
+<label>OR JOIN WITH A CODE</label><div class="mp-row" style="margin-top:0"><input id="mpj" maxlength="8" placeholder="CODE" style="text-transform:uppercase"><button class="mp-btn alt" id="mpg" style="flex:0 0 90px">JOIN</button></div>
+<div class="mp-row"><button class="mp-btn alt" id="mpb">BACK</button></div>`);
+    const q = (i) => s.querySelector('#' + i), nm = () => (q('mpn').value.trim() || 'Player').slice(0, 14);
+    const setMode = (m) => { mode = m; q('m1').classList.toggle('alt', m !== '1v1'); q('m2').classList.toggle('alt', m !== '2v2'); };
+    setMode(mode);
+    q('m1').onclick = () => setMode('1v1'); q('m2').onclick = () => setMode('2v2');
+    q('mpc').onclick = () => { setName(nm()); connect({ room: 'new', name: nm() }); };
+    q('mpg').onclick = () => { const c = q('mpj').value.trim().toUpperCase(); if (!c) return q('mpj').focus(); setName(nm()); connect({ room: c, name: nm() }); };
+    q('mpb').onclick = () => { clear(); game.showMenu && game.showMenu(); };
+    s.addEventListener('keydown', (e) => e.stopPropagation());
+    if (preset) { q('mpj').value = preset; }
+  }
+
+  function wakeScreen(p, attempt) {
+    const t0 = performance.now();
+    const s = show(`<div class="mp-c"><div class="mp-spin"></div><h2 style="font-size:22px">Waking up the server...</h2><p id="mpw">The free server naps when nobody plays. This takes up to a minute. Retrying automatically.</p><p id="mpt" style="opacity:.5">0s</p><div class="mp-row"><button class="mp-btn alt" id="mpx">CANCEL</button></div></div>`);
+    wakeStop = false;
+    s.querySelector('#mpx').onclick = () => { wakeStop = true; clearTimeout(wakeTimer); lobby(); };
+    const tick = setInterval(() => { const e = s.querySelector('#mpt'); if (e) e.textContent = Math.round((performance.now() - t0) / 1000) + 's'; else clearInterval(tick); }, 500);
+    const poll = async () => {
+      if (wakeStop) { clearInterval(tick); return; }
+      try { const c = new AbortController(); const to = setTimeout(() => c.abort(), 8000); await fetch(HEALTH, { mode: 'no-cors', cache: 'no-store', signal: c.signal }); clearTimeout(to); clearInterval(tick); if (!wakeStop) open(p); return; }
+      catch (e) { const w = s.querySelector('#mpw'); if (w) w.textContent = 'Still waking up... retrying'; }
+      wakeTimer = setTimeout(poll, 3000);
+    };
+    poll();
+  }
+
+  function connect(p) { wakeScreen(p, 0); }
+
+  function open(p) {
+    show(`<div class="mp-c"><div class="mp-spin"></div><h2 style="font-size:22px">Connecting...</h2></div>`);
+    const url = WS + '?room=' + encodeURIComponent(p.room) + '&name=' + encodeURIComponent(p.name) + (p.room === 'new' ? '&mode=' + mode : '');
+    const net = new NetClient({ createController, colliders: game.phys, url });
+    mp.net = net; let welcomed = false, tries = 0;
+    net.on('welcome', (w) => { welcomed = true; if (!mp.active) begin(w); else banner('Reconnected', 1.5); try { history.replaceState(0, '', '?room=' + w.room); } catch (e) {} });
+    net.on('error', (m) => { if (!welcomed) { stop(); show(`<div class="mp-c"><h2 style="font-size:22px">Could not join</h2><p>${esc(m.msg || m.code || 'Room unavailable')}</p><div class="mp-row"><button class="mp-btn" id="mpr">BACK</button></div></div>`).querySelector('#mpr').onclick = () => lobby(); } });
+    net.on('reconnecting', () => { banner('Connection lost. Reconnecting...', 99); });
+    net.on('disconnected', () => { stop(); show(`<div class="mp-c"><h2 style="font-size:22px">Disconnected</h2><p>The connection dropped.</p><div class="mp-row"><button class="mp-btn" id="mpr">BACK TO LOBBY</button></div></div>`).querySelector('#mpr').onclick = () => lobby(); });
+    net.on('close', () => { if (!welcomed && !net.closing && ++tries > 3) { stop(); wakeScreen(p, 0); } });
+    net.on('round_start', () => banner('Round start', 1.6));
+    net.on('round_end', (m) => banner(m && m.winner != null ? 'Round over' : 'Round over', 2.5));
+    net.on('planted', () => banner('Bomb planted', 2));
+    net.on('defused', () => banner('Bomb defused', 2));
+    net.on('explode', () => banner('Bomb exploded', 2));
+    net.on('kill', (m) => { if (m && m.killer === net.id) banner('You got a kill', 1.2); else if (m && m.victim === net.id) banner('You were killed', 2); });
+    net.connect();
+  }
+
+  function banner(t, secs) { lastMsg = t; msgT = secs; }
+
+  function begin(w) {
+    clear(); mp.active = true; game.state = 'mp';
+    if (game.ov) game.ov.style.display = 'none';
+    if (game.menuStop) try { game.menuStop(); } catch (e) {}
+    game.bots && game.bots.clear && game.bots.clear();
+    try { game.vm.group.visible = true; } catch (e) {}
+    hud = el(`<div class="cr"></div><div class="top"><div class="sc"><b>0</b> : <b>0</b></div><div class="ph"></div></div><div class="rc"></div><div class="hp"></div><div class="am"></div><div class="net"></div><div class="msg"></div>`, 'mp-hud');
+    root.appendChild(hud);
+    hud.querySelector('.rc').textContent = 'ROOM ' + w.room + ' - share the link or code. L to leave';
+    bind(); game.canvas.requestPointerLock && game.canvas.requestPointerLock();
+  }
+
+  function bind() {
+    const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); binds.push([t, ev, f, o]); };
+    on(document, 'keydown', (e) => { if (!mp.active) return; if (e.code === 'Escape') return; if (e.code === 'KeyL') { game.showMenu(); return; } keys[e.code] = true; if (e.code === 'KeyQ' && !e.repeat) mp.net.input.aim = !mp.net.input.aim; if (e.code.startsWith('Digit') && +e.code[5] >= 1 && +e.code[5] <= 3 && e.code !== 'Digit3') mp.net.setInput({ w: +e.code[5] - 1 }); if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault(); });
+    on(document, 'keyup', (e) => { keys[e.code] = false; });
+    on(game.canvas, 'mousedown', (e) => { if (!mp.active) return; if (document.pointerLockElement !== game.canvas) { game.canvas.requestPointerLock(); return; } if (e.button === 0) { mp.net.setInput({ fire: true }); mp.net.tap(); } if (e.button === 2) mp.net.input.aim = !mp.net.input.aim; e.preventDefault(); });
+    on(document, 'mouseup', (e) => { if (mp.active && e.button === 0) mp.net.setInput({ fire: false }); });
+    on(document, 'mousemove', (e) => { if (mp.active && document.pointerLockElement === game.canvas) mp.net.look(e.movementX, e.movementY); });
+    on(window, 'blur', () => { keys = {}; });
+  }
+
+  function charFor(p) {
+    let r = remotes.get(p.id);
+    if (!r) {
+      const ch = createCharacter(THREE, { id: CHARACTER_IDS[p.id % CHARACTER_IDS.length], team: p.team === mp.net.team ? 'CT' : 'T', weapon: WEAPON_ORDER[p.weapon] || 'machinegun' });
+      game.scene.add(ch.group);
+      const tag = el(esc(p.name), 'tag'); hud.appendChild(tag);
+      r = { ch, tag, lx: p.x, lz: p.z, wp: p.weapon }; remotes.set(p.id, r);
+    }
+    return r;
+  }
+
+  const v3 = new THREE.Vector3();
+  mp.frame = (dt) => {
+    const net = mp.net; if (!net) return;
+    const k = keys;
+    net.setInput({ f: (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), r: (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0), j: !!k.Space, c: !!(k.ShiftLeft || k.ShiftRight), rl: !!k.KeyR, use: !!k.KeyE });
+    net.update(dt);
+    const e = net.eye(), cam = game.camera;
+    cam.position.set(e.x, e.y, e.z); cam.rotation.order = 'YXZ'; cam.rotation.set(e.pitch, e.yaw, 0);
+    const want = new Set();
+    for (const p of net.remotes()) {
+      want.add(p.id); const r = charFor(p);
+      r.ch.group.visible = p.alive && p.connected !== false; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
+      const sp = dt > 0 ? Math.hypot(p.x - r.lx, p.z - r.lz) / dt : 0; r.lx = p.x; r.lz = p.z; r.sp = (r.sp || 0) + (sp - (r.sp || 0)) * 0.3;
+      try { r.ch.update(dt, { speed: r.sp, aiming: false, pitch: p.pitch, reloading: false, weapon: WEAPON_ORDER[p.weapon], alive: p.alive }); } catch (er) {}
+      v3.set(p.x, p.y + 2.1, p.z).project(cam); const vis = r.ch.group.visible && v3.z < 1;
+      r.tag.style.display = vis ? '' : 'none'; if (vis) { r.tag.style.left = ((v3.x + 1) / 2 * 100) + '%'; r.tag.style.top = ((1 - v3.y) / 2 * 100) + '%'; r.tag.style.color = p.team === net.team ? '#7fe3ff' : '#ffb347'; }
+    }
+    for (const [id, r] of remotes) if (!want.has(id)) { game.scene.remove(r.ch.group); r.tag.remove(); remotes.delete(id); }
+    // viewmodel
+    try { const wi = WEAPON_ORDER[net.me.weapon]; if (wi && game.vm.current !== wi) game.vm.setWeapon(wi); game.vm.group.visible = net.alive; game.vm.update(dt, { speed: e.speed, grounded: e.grounded, crouched: e.crouched, aiming: net.input.aim }); } catch (er) {}
+    cam.fov = net.input.aim ? 30 : 75; cam.updateProjectionMatrix();
+    // HUD
+    const q = (c) => hud.querySelector('.' + c);
+    q('sc').innerHTML = `<b>${net.score[0]}</b> : <b>${net.score[1]}</b>`;
+    q('ph').textContent = (net.phase || '').toUpperCase() + (net.phaseLeft ? '  ' + Math.ceil(net.phaseLeft) + 's' : '') + (net.bomb ? '  BOMB ' + (net.bomb.t != null ? Math.ceil(net.bomb.t) + 's' : '') : '');
+    q('hp').textContent = (net.alive || net.phase !== 'live') ? Math.max(0, Math.round(net.me.hp || 100)) : 'DEAD';
+    q('am').innerHTML = (net.alive || net.phase !== 'live') ? `${net.me.mag} <small>/ ${net.me.res}</small>` : '';
+    q('net').textContent = Math.round(net.rttMs) + ' ms';
+    if (msgT > 0) { msgT -= dt; q('msg').textContent = msgT > 0 ? lastMsg : ''; } else if (lastMsg && msgT <= 0 && lastMsg.indexOf('Reconnecting') < 0) q('msg').textContent = '';
+    else q('msg').textContent = lastMsg;
+    if (!net.alive && net.phase === 'live') q('msg').textContent = 'You are dead. Waiting for the round to end';
+    game.renderMP();
+  };
+
+  function stop() {
+    mp.active = false; remotes.forEach((r) => { game.scene.remove(r.ch.group); }); remotes.clear();
+    if (mp.net) { try { mp.net.closing = true; mp.net.ws && mp.net.ws.close(); } catch (e) {} mp.net = null; }
+    binds.forEach(([t, ev, f, o]) => t.removeEventListener(ev, f, o)); binds = [];
+    if (hud) { hud.remove(); hud = null; } keys = {}; game.state = 'menu'; wakeStop = true; clearTimeout(wakeTimer);
+    if (document.pointerLockElement) document.exitPointerLock();
+    try { game.vm.group.visible = false; } catch (e) {}
+  }
+  mp.stop = stop; mp.open = lobby;
+  mp.autoJoin = () => { const m = /[?&]room=([A-Za-z0-9]+)/.exec(location.search); if (m) { lobby(m[1].toUpperCase()); return true; } return false; };
+  return mp;
+}

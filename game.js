@@ -19,6 +19,7 @@ import { createDestruction } from './destruction.js';
 import { createGrenades } from './grenades.js';
 import { playIntro } from './intro.js';
 import { buildMenu } from './menu.js';
+import { createMultiplayer } from './mp.js';
 import { createCharacter, ROSTER } from './characters.js';
 
 const CSS = `
@@ -139,7 +140,9 @@ export class Game {
     this.bindEvents(); this.resize();
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(root);
     this.last = performance.now(); this.running = true; this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
+    this.mp = createMultiplayer(this, THREE);
     this.showMenu(); if (!/[?&]nointro/.test(location.search)) playIntro(root, () => {});
+    if (/[?&]room=/.test(location.search)) setTimeout(() => this.openMP(), 50);
   }
   resize() {
     const w = this.root.clientWidth || 640, h = this.root.clientHeight || 360;
@@ -371,7 +374,10 @@ export class Game {
     for (const [t, fn, alt] of btns) { const b = document.createElement('button'); b.className = 'b' + (alt ? ' alt' : ''); b.textContent = t; b.onclick = fn; row.appendChild(b); }
     if (btns.length) this.ov.appendChild(row);
   }
+  openMP() { if (this.menuStop) { this.menuStop(); this.menuStop = null; } this.ov.style.display = 'none'; this.mp.open(); }
+  renderMP() { if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera); }
   showMenu() {
+    if (this.mp && this.mp.active) this.mp.stop(); this.ov.style.display = 'flex';
     this.state = 'menu'; this.sb.style.display = 'none'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
     this.overlay('', []); this.menuStop = buildMenu(this, THREE, createCharacter, ROSTER);
@@ -564,6 +570,7 @@ export class Game {
     { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')'; p.n = 0; p.t = 0; p.worst = 0; } }
     const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
     const dt = real * this.kc.update(real) * this.killfx.update(real);
+    if (this.mp && this.mp.active) { this.mp.frame(real); return; }
     this.updateBlast(dt);
     if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
