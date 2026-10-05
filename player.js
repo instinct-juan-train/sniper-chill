@@ -304,7 +304,7 @@ export function createHUD(container = document.body) {
 .sc-hp-fill{height:100%;width:100%;background:#52f0a0;border-radius:10px;transition:width .15s,background .2s}
 .sc-hp-num{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;line-height:1;text-shadow:0 1px 2px #000,0 0 3px #000}
 .sc-ammo{position:absolute;right:28px;bottom:24px;text-align:right;text-shadow:0 2px 0 rgba(0,0,0,.45)}
-.sc-ammo-n{font-size:44px;font-weight:900;line-height:1}.sc-ammo-n small{font-size:20px;opacity:.7}
+.sc-ammo-n{font-size:56px;font-weight:700;line-height:1}.sc-ammo-n small{font-size:22px;opacity:.65;font-weight:500}
 .sc-ammo-w{font-size:13px;font-weight:700;letter-spacing:.1em;opacity:.85}
 .sc-ammo.low .sc-ammo-n{color:#ff6b6b}
 .sc-ch{position:absolute;left:50%;top:50%;width:0;height:0}
@@ -321,7 +321,7 @@ export function createHUD(container = document.body) {
 .sc-flash{position:absolute;inset:0;background:radial-gradient(circle,transparent 40%,rgba(255,40,60,.65));opacity:0;transition:opacity .4s}
 .sc-flash.on{opacity:1;transition:none}
 .sc-bomb{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-weight:800;font-size:18px;text-shadow:0 2px 0 rgba(0,0,0,.5)}
-.sc-reload{position:absolute;left:50%;top:58%;transform:translateX(-50%);font-weight:800;opacity:0;transition:opacity .15s}
+.sc-reload{position:absolute;right:200px;bottom:76px;font-weight:800;opacity:0;transition:opacity .15s}
 `;
   document.head.appendChild(css);
   const root = document.createElement('div'); root.className = 'sc-hud';

@@ -15,28 +15,29 @@ export const DEFAULT_CONFIG = {
   selfDamage: false,          // blasts hurt the player (not implemented: reserved)
   names: { uav: 'Radar UAV', missile: 'Misil teledirigido', rc: 'Coche RC bomba', airstrike: 'Ataque aéreo' },
   uav: { duration: 20, alertBots: true, alertRadius: 30 },
-  missile: { speed: 24, boost: 44, lifetime: 14, startHeight: 30, startBack: 8, startPitch: -0.8, blastRadius: 9, maxDamage: 140, minDamage: 40, alertBots: true },
+  missile: { speed: 50, boost: 90, lifetime: 20, startHeight: 150, startBack: 10, startPitch: -1.1, blastRadius: 9, maxDamage: 140, minDamage: 40, alertBots: true },
   rc: { speed: 10, boost: 17, turnRate: 2.4, lifetime: 25, blastRadius: 6, maxDamage: 130, minDamage: 40, contactRadius: 1.15, engineNoise: true },
   airstrike: { bombs: 6, spacing: 4.5, interval: 0.28, delay: 1.4, blastRadius: 5, maxDamage: 120, minDamage: 40, range: 45 },
 };
 
 const CSS = `
 .sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none}
-.sk .tray{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:10px;align-items:flex-end}
-.sk .slot{position:relative;width:64px;height:64px;border-radius:16px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
-.sk .slot svg{width:30px;height:30px}
-.sk .slot .k{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#ffd166;color:#222;border-radius:7px;padding:0 7px;font-size:12px;line-height:18px;text-shadow:none}
-.sk .slot .t{font-size:10px;letter-spacing:.06em;opacity:.9;margin-top:2px}
+.sk .tray{position:absolute;right:12px;top:13%;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
+.sk .slot{position:relative;width:52px;height:52px;border-radius:12px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
+.sk .slot svg{width:24px;height:24px}
+.sk .slot .k{position:absolute;top:-7px;left:-7px;background:#ffd166;color:#222;border-radius:7px;padding:0 7px;font-size:12px;line-height:18px;text-shadow:none}
+.sk .slot .t{font-size:9px;letter-spacing:.06em;opacity:.9;margin-top:2px}
 .sk .slot .n{position:absolute;right:5px;bottom:2px;font-size:13px}
-.sk .slot.have{background:rgba(255,209,102,.28);border-color:#ffd166;transform:translateY(-6px);animation:skp 1.1s ease-in-out infinite}
+.sk .slot.have{background:rgba(255,209,102,.28);border-color:#ffd166;transform:translateX(-8px) scale(1.12);animation:skp .9s ease-in-out infinite;box-shadow:0 0 14px 2px rgba(255,209,102,.75)}
 .sk .slot.act{background:rgba(82,240,160,.35);border-color:#52f0a0}
-@keyframes skp{50%{box-shadow:0 0 18px 3px rgba(255,209,102,.7)}}
-.sk .streak{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);font-weight:900;font-size:15px;letter-spacing:.14em;text-shadow:0 2px 0 rgba(0,0,0,.55);display:flex;gap:6px;align-items:center}
+@keyframes skp{50%{box-shadow:0 0 26px 7px rgba(255,209,102,.95);background:rgba(255,209,102,.55)}}
+.sk .streak{position:absolute;right:12px;top:calc(13% - 26px);font-weight:700;font-size:12px;letter-spacing:.14em;text-shadow:0 2px 0 rgba(0,0,0,.55);display:flex;gap:6px;align-items:center}
+.sk .streak .pip{display:none}
 .sk .pip{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.7)}
 .sk .pip.on{background:#ffd166;border-color:#fff}.sk .pip.mark{border-color:#ffd166;border-radius:3px}
-.sk .banner{position:absolute;left:50%;top:22%;transform:translate(-50%,0) scale(.8);text-align:center;opacity:0;text-shadow:0 3px 0 rgba(0,0,0,.5);transition:opacity .25s,transform .25s}
+.sk .banner{position:absolute;left:50%;top:15%;transform:translate(-50%,0) scale(.8);text-align:center;opacity:0;text-shadow:0 3px 0 rgba(0,0,0,.5);transition:opacity .25s,transform .25s}
 .sk .banner.on{opacity:1;transform:translate(-50%,0) scale(1)}
-.sk .banner b{display:block;font-size:clamp(26px,4.4vw,46px);letter-spacing:.06em;color:#ffd166}
+.sk .banner b{display:block;font-size:clamp(20px,3vw,32px);letter-spacing:.06em;color:#ffd166}
 .sk .banner span{font-size:clamp(13px,1.7vw,18px);font-weight:700}
 .sk .mini{position:absolute;left:16px;top:16px;width:150px;height:150px;border-radius:50%;border:3px solid rgba(255,255,255,.7);background:rgba(20,40,60,.55);display:none;overflow:hidden;box-shadow:0 0 0 3px rgba(0,0,0,.25)}
 .sk .minilab{position:absolute;left:16px;top:172px;width:156px;text-align:center;font-weight:800;font-size:13px;letter-spacing:.1em;text-shadow:0 2px 0 rgba(0,0,0,.5);display:none}

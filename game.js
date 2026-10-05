@@ -41,16 +41,16 @@ const CSS = `
 .sg .sr input[type=checkbox]{width:24px;height:24px;accent-color:#37c97c}
 .sg .sr input[type=range]{accent-color:#ffd166;width:100%}
 .sg .sr select{font:inherit;padding:8px;border-radius:10px;border:0;background:#2e4259;color:#fff}
-.sg .invb{position:absolute;right:24px;bottom:112px;z-index:22;display:flex;gap:6px;align-items:flex-end;pointer-events:none;font-family:Fredoka,system-ui,sans-serif}
-.sg .invb .it{min-width:58px;padding:6px 9px 5px;border-radius:12px;background:rgba(16,27,32,.62);border:2px solid rgba(255,255,255,.28);text-align:center;color:#fff;line-height:1.05;position:relative;transition:transform .12s,background .12s}
-.sg .invb .it kbd{position:absolute;top:-9px;left:-4px;background:#ffd166;color:#222;font:700 12px Fredoka,system-ui;padding:1px 6px;border-radius:7px;border:2px solid #fff}
-.sg .invb .it b{display:block;font-size:12px;font-weight:600;letter-spacing:.03em;white-space:nowrap}
-.sg .invb .it small{font-size:11px;opacity:.75;font-weight:500}
-.sg .invb .it.cur{background:rgba(255,209,102,.9);color:#222;border-color:#fff;transform:translateY(-5px) scale(1.06)}
-.sg .invb .it.cur small{opacity:.8}
+.sg .invb{position:absolute;right:12px;bottom:112px;z-index:22;display:flex;flex-direction:column;gap:4px;align-items:stretch;pointer-events:none;font-family:Fredoka,system-ui,sans-serif}
+.sg .invb .it{min-width:104px;padding:3px 10px 3px 8px;border-radius:8px;background:rgba(10,14,24,.5);border:2px solid rgba(255,255,255,.22);color:#fff;line-height:1.1;display:flex;align-items:center;gap:8px;transition:transform .12s,background .12s}
+.sg .invb .it kbd{background:rgba(255,255,255,.9);color:#222;font:700 11px Fredoka,system-ui;padding:1px 6px;border-radius:5px}
+.sg .invb .it b{font-size:12px;font-weight:600;letter-spacing:.03em;white-space:nowrap;flex:1;text-align:left}
+.sg .invb .it small{font-size:11px;opacity:.8;font-weight:600}
+.sg .invb .it.cur{background:rgba(255,209,102,.92);color:#222;border-color:#fff;transform:translateX(-6px)}
+.sg .invb .it.cur kbd{background:#222;color:#fff}
 .sg .invb .it.empty{opacity:.4}
-.sg .invb .it.gr{background:rgba(54,98,150,.7)}
-.sg .invb .sep{width:6px}
+.sg .invb .it.gr{background:rgba(54,98,150,.6)}
+.sg .invb .sep{height:4px}
 .sg .invh{position:absolute;right:24px;bottom:176px;z-index:22;font-weight:600;font-size:12px;color:#ffe9a8;text-shadow:0 1px 3px #000;pointer-events:none;opacity:0;transition:opacity .3s;text-align:right}
 .sg .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(20,30,45,.74);text-align:center;padding:16px;z-index:100}
 .sg .ov h2{margin:0;font-size:clamp(24px,4.5vw,44px)}
@@ -117,7 +117,7 @@ export class Game {
     this.streaks.show(false);
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
-    this.hint = document.createElement('div'); this.hint.style.cssText = 'position:absolute;left:50%;bottom:30%;transform:translateX(-50%);z-index:21;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;pointer-events:none'; root.appendChild(this.hint);
+    this.hint = document.createElement('div'); this.hint.style.cssText = 'position:absolute;right:200px;bottom:34px;z-index:21;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;pointer-events:none'; root.appendChild(this.hint);
     this.sb = document.createElement('div'); this.sb.className = 'scb'; this.sb.style.display = 'none'; root.appendChild(this.sb);
     this.match = { p: 0, b: 0, round: 1, over: false };
     this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;left:8px;top:8px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
