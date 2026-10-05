@@ -1,5 +1,6 @@
 // mp.js - multiplayer lobby, wake screen and in-match client (uses net.js / common.js)
 import { NetClient } from './net.js';
+import * as ACC from './account.js';
 import { createController } from './movement.js';
 import { createCharacter, CHARACTER_IDS } from './characters.js';
 import { WEAPON_ORDER } from './player.js';
@@ -100,9 +101,10 @@ export function createMultiplayer(game, THREE) {
 
   function connect(p) { wakeScreen(p, 0); }
 
-  function open(p) {
+  async function open(p) {
     show(`<div class="mp-c"><div class="mp-spin"></div><h2 style="font-size:22px">Connecting...</h2></div>`);
-    const url = WS + '?room=' + encodeURIComponent(p.room) + '&name=' + encodeURIComponent(p.name) + (p.room === 'new' || p.room === 'MATCH' ? '&mode=' + mode : '');
+    try { await Promise.race([ACC.ensure(), new Promise((r) => setTimeout(r, 5000))]); } catch (e) {}
+    const url = WS + '?room=' + encodeURIComponent(p.room) + '&name=' + encodeURIComponent(p.name) + (p.room === 'new' || p.room === 'MATCH' ? '&mode=' + mode : '') + (ACC.hasAccount() ? '&acct=' + encodeURIComponent(ACC.token()) : '');
     const net = new NetClient({ createController, colliders: game.phys, url });
     mp.net = net; let welcomed = false, tries = 0;
     net.on('welcome', (w) => { welcomed = true; if (!mp.active) begin(w); else banner('Reconnected', 1.5); try { history.replaceState(0, '', '?room=' + w.room); } catch (e) {} });
