@@ -49,10 +49,12 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const stopConf = startConfetti(bg.querySelector('canvas'), { rain: 22, speed: .35 });
   const name = (() => { try { return localStorage.getItem('sc_name') || 'Player'; } catch (e) { return 'Player'; } })();
   const el = document.createElement('div'); el.className = 'mn';
+  const LV = ['chill', 'easy', 'medium', 'hard', 'veteran', 'insane'];
+  const cycleDiff = () => { const i = (LV.indexOf(game.diff) + 1) % LV.length; game.diff = LV[i]; try { const s = JSON.parse(localStorage.getItem('sc_settings') || '{}'); s.diff = game.diff; localStorage.setItem('sc_settings', JSON.stringify(s)); } catch (e) {} if (game.set) game.set.diff = game.diff; const b = list.querySelector('.mn-i.dif'); if (b) b.innerHTML = 'Difficulty<em>' + game.diff + '</em>'; };
   const items = [
     { t: 'Play vs bots', a: () => game.start('bomb') },
     { t: 'Multiplayer', a: () => game.openMP() }, { gap: 1 },
-    { t: 'How to play', a: () => game.tutorial() }, { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
+    { t: 'Difficulty', diff: 1, a: () => cycleDiff() }, { t: 'How to play', a: () => game.tutorial() }, { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
   ];
   el.innerHTML = `<div class="mn-char"><canvas style="width:100%;height:100%"></canvas></div><div class="mn-logo"><div class="chl">${logoHTML()}</div></div><div class="mn-list"></div><div class="mn-pan"></div>
 <div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">LEVEL 1</div></div>
@@ -66,7 +68,7 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const show = () => { const it = items[sel]; pan.innerHTML = it.p ? panels[it.p]() : ''; };
   const setSel = (i) => { if (items[i].gap) return; if (i !== sel) { try { window.ChillAudio && window.ChillAudio.play('uiHover'); } catch (e) {} } sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };
   items.forEach((it, i) => { if (it.gap) { const d = document.createElement('div'); d.className = 'mn-gap'; list.appendChild(d); btns.push(null); return; }
-    const b = document.createElement('button'); b.className = 'mn-i' + (it.lock ? ' lock' : ''); b.innerHTML = it.t + (it.lock ? `<em>${it.lock}</em>` : ''); b.onmouseenter = () => setSel(i); b.onclick = () => { setSel(i); if (it.a) it.a(); }; list.appendChild(b); btns.push(b); });
+    const b = document.createElement('button'); b.className = 'mn-i' + (it.lock ? ' lock' : '') + (it.diff ? ' dif' : ''); b.innerHTML = it.t + (it.lock ? `<em>${it.lock}</em>` : '') + (it.diff ? `<em>${game.diff}</em>` : ''); b.onmouseenter = () => setSel(i); b.onclick = () => { setSel(i); if (it.a) it.a(); }; list.appendChild(b); btns.push(b); });
   setSel(0);
   const onKey = (e) => { if (game.state !== 'menu' || game.setOv.style.display !== 'none') return; const dir = e.code === 'ArrowDown' ? 1 : e.code === 'ArrowUp' ? -1 : 0;
     if (dir) { let i = sel; do { i = (i + dir + items.length) % items.length; } while (items[i].gap); setSel(i); e.preventDefault(); } else if (e.code === 'Enter') { try { window.ChillAudio && window.ChillAudio.play('uiClick'); } catch (e2) {} const it = items[sel]; if (it.a) it.a(); } else if (e.code === 'Escape') setSel(0); };

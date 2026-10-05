@@ -45,6 +45,8 @@ export const DIFFICULTY = {
   easy:   { reaction: 0.70, aimSigma: 0.080, turn: 3.0,  fov: 100, view: 38, speed: 4.0, coverBias: 0.15, strafe: 0.30, headAim: 0.02, hear: 0.40, burst: 12, burstPause: 0.15, patience: 3.0, peekDur: 1.4, closeCombat: 0.4 },
   medium: { reaction: 0.38, aimSigma: 0.036, turn: 6.0,  fov: 110, view: 55, speed: 4.7, coverBias: 0.50, strafe: 0.60, headAim: 0.12, hear: 0.70, burst: 6,  burstPause: 0.28, patience: 4.5, peekDur: 1.1, closeCombat: 0.7 },
   hard:   { reaction: 0.20, aimSigma: 0.015, turn: 11.0, fov: 120, view: 75, speed: 5.2, coverBias: 0.85, strafe: 0.95, headAim: 0.35, hear: 1.00, burst: 4,  burstPause: 0.34, patience: 6.0, peekDur: 0.9, closeCombat: 1.0 },
+  veteran: { reaction: 0.14, aimSigma: 0.009, turn: 14.0, fov: 125, view: 85, speed: 5.4, coverBias: 0.9, strafe: 1.0, headAim: 0.5, hear: 1.0, burst: 4, burstPause: 0.3, patience: 6.5, peekDur: 0.8, closeCombat: 1.0 },
+  insane:  { reaction: 0.09, aimSigma: 0.004, turn: 18.0, fov: 130, view: 95, speed: 5.6, coverBias: 0.95, strafe: 1.0, headAim: 0.7, hear: 1.0, burst: 5, burstPause: 0.25, patience: 7.0, peekDur: 0.7, closeCombat: 1.0 },
 };
 
 // rate = shots/s, spread = radians cone (half angle), range = effective metres, mag/reload in shots/s.
