@@ -20,6 +20,7 @@ import { createGrenades } from './grenades.js';
 import { playIntro } from './intro.js';
 import { buildMenu } from './menu.js';
 import { createMultiplayer } from './mp.js';
+import { showTutorial } from './tutorial.js';
 import { createCharacter, ROSTER } from './characters.js';
 
 const CSS = `
@@ -394,7 +395,7 @@ export class Game {
       const skin = new THREE.MeshLambertMaterial({ color: 0xf2c9a0 }), hl = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.09), skin), hr = hl.clone(); hl.position.set(-0.12, 0, 0.05); hr.position.set(0.12, 0, 0.05);
       grp.add(box, led, pad, hl, hr); grp.visible = false; this.camera.add(grp); this.handBomb = { grp, led, hr, a: 0 };
     }
-    const H = this.handBomb, want = this.plantT > 0 ? 1 : 0; H.a += (want - H.a) * Math.min(1, dt * 10); const a = H.a;
+    const H = this.handBomb, want = (this.plantT > 0 && !this.bomb.planted) ? 1 : 0; H.a += (want - H.a) * Math.min(1, dt * 10); const a = H.a;
     H.grp.visible = a > 0.02; if (a >= 0.5 && !H.hid) { H.hid = true; H.was = this.vm.group.visible; this.vm.group.visible = false; } else if (a < 0.5 && H.hid) { H.hid = false; this.vm.group.visible = this.knifeOn ? false : true; }
     if (H.grp.visible) { const t = performance.now() / 1000; H.grp.position.set(0, -0.42 + 0.22 * a, -0.5); H.grp.rotation.set(0.5 - 0.25 * a, 0, 0); H.hr.position.y = Math.abs(Math.sin(t * 7)) * 0.03; H.led.visible = Math.sin(t * 14) > 0; }
   }
@@ -425,7 +426,9 @@ export class Game {
     this.overlay('<h2>Paused</h2><p>Click to continue (captures the mouse).</p>', [['Resume', () => this.resume()], ['Settings', () => this.openSettings(), true], ['Quit to menu', () => this.showMenu(), true]]);
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
+  tutorial(then) { if (this.menuStop) { try { this.menuStop(); } catch (e) {} } this.ov.style.display = 'none'; showTutorial(this.root, () => { try { localStorage.setItem('sc_tut', '1'); } catch (e) {} if (then) then(); else this.showMenu(); }); }
   start(mode, cont = false) {
+    if (!cont && !this._tutDone) { let seen = false; try { seen = !!localStorage.getItem('sc_tut'); } catch (e) {} if (!seen) { this._tutDone = true; this.tutorial(() => this.start(mode, cont)); return; } }
     if (!cont) play('ui_start');
     const newMatch = !cont || !this.eco || this.match.over;
     if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
@@ -604,7 +607,7 @@ export class Game {
   }
   plant(site) {
     const s = this.map.bombsites[site], st = this.ctrl.state;
-    this.bomb.planted = true; this.bomb.site = site; this.bomb.t = 40; this.bomb.defuseT = 0; this.bomb.beepT = 0;
+    this.plantT = 0; this.bomb.planted = true; this.bomb.site = site; this.bomb.t = 40; this.bomb.defuseT = 0; this.bomb.beepT = 0;
     this.bomb.pos.set(st.position.x, st.position.y, st.position.z); this.bombMesh.position.set(st.position.x, st.position.y + 0.13, st.position.z); this.bombMesh.visible = true; play('bomb_plant'); this.anim.onBombPlant(this.bomb.pos);
   }
   loop(now) {

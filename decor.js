@@ -23,6 +23,7 @@ export function addDecor(THREE, map, parent) {
     const [x0, z0, x1, z1, o = {}] = w, h = o.h || 3, lenX = x1 - x0, lenZ = z1 - z0, alongX = lenX >= lenZ, len = alongX ? lenX : lenZ, th = alongX ? lenZ : lenX;
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; const y0 = o.y0 ?? Math.max(0, ground(alongX ? cx : x0 - 1, alongX ? z0 - 1 : cz));
     if (h < 1.5 || len < 2.5) continue;
+    if ((L.buildings || []).some((bb) => cx > bb.x0 + 0.3 && cx < bb.x1 - 0.3 && cz > bb.z0 + 0.3 && cz < bb.z1 - 0.3)) continue; // interior partitions: no decor (flicker)
     // trim: cap + baseboard
     if (alongX) { box(0xfff3da, cx, y0 + h + 0.09, cz, len + 0.3, 0.18, th + 0.3); box(0xb9a98e, cx, y0 + 0.28, cz, len + 0.12, 0.56, th + 0.12); }
     else { box(0xfff3da, cx, y0 + h + 0.09, cz, th + 0.3, 0.18, len + 0.3); box(0xb9a98e, cx, y0 + 0.28, cz, th + 0.12, 0.56, len + 0.12); }
@@ -56,7 +57,8 @@ export function addDecor(THREE, map, parent) {
   for (const b of L.buildings || []) {
     const y0 = b.y0 || 0, h = b.h || 4.4;
     for (const [x, z] of [[b.x0, b.z0], [b.x1, b.z0], [b.x0, b.z1], [b.x1, b.z1]]) box(0xfff3da, x, y0 + h / 2, z, 0.5, h + 0.1, 0.5);
-    box(0xb9a98e, (b.x0 + b.x1) / 2, y0 + 0.3, (b.z0 + b.z1) / 2 + 0, b.x1 - b.x0 + 0.2, 0.6, b.z1 - b.z0 + 0.2);
+    { const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, W = b.x1 - b.x0 + 0.24, D = b.z1 - b.z0 + 0.24; // outside-only baseboard strips (nothing inside the house, so no shimmer indoors)
+      box(0xb9a98e, cx, y0 + 0.3, b.z0 - 0.06, W, 0.6, 0.12); box(0xb9a98e, cx, y0 + 0.3, b.z1 + 0.06, W, 0.6, 0.12); box(0xb9a98e, b.x0 - 0.06, y0 + 0.3, cz, 0.12, 0.6, D); box(0xb9a98e, b.x1 + 0.06, y0 + 0.3, cz, 0.12, 0.6, D); }
     for (const k of ['N', 'S', 'W', 'E']) for (const r of (b.doors && b.doors[k]) || []) { // lamp beside each door
       const m = (r[0] + r[1]) / 2, off = (r[1] - r[0]) / 2 + 0.5, lx = k === 'N' ? m + off : k === 'S' ? m - off : (k === 'W' ? b.x0 - 0.2 : b.x1 + 0.2), lz = k === 'W' ? m + off : k === 'E' ? m - off : (k === 'N' ? b.z0 - 0.2 : b.z1 + 0.2);
       put(cylG, 0x4b5b70, lx, y0 + 2.5, lz, 0.06, 1.0, 0.06); put(sphG, 0xffe9a0, lx, y0 + 3.15, lz, 0.32, 0.32, 0.32);

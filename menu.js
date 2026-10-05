@@ -52,7 +52,7 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const items = [
     { t: 'Play vs bots', a: () => game.start('bomb') },
     { t: 'Multiplayer', a: () => game.openMP() }, { gap: 1 },
-    { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
+    { t: 'How to play', a: () => game.tutorial() }, { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
   ];
   el.innerHTML = `<div class="mn-char"><canvas style="width:100%;height:100%"></canvas></div><div class="mn-logo"><div class="chl">${logoHTML()}</div></div><div class="mn-list"></div><div class="mn-pan"></div>
 <div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">LEVEL 1</div></div>
