@@ -118,7 +118,7 @@ export function createMultiplayer(game, THREE) {
     const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); binds.push([t, ev, f, o]); };
     on(document, 'keydown', (e) => { if (!mp.active) return; if (e.code === 'Escape') return; if (e.code === 'KeyL') { game.showMenu(); return; } keys[e.code] = true; if (e.code === 'KeyQ' && !e.repeat) mp.net.input.aim = !mp.net.input.aim; if (e.code.startsWith('Digit') && +e.code[5] >= 1 && +e.code[5] <= 3 && e.code !== 'Digit3') mp.net.setInput({ w: +e.code[5] - 1 }); if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault(); });
     on(document, 'keyup', (e) => { keys[e.code] = false; });
-    on(game.canvas, 'mousedown', (e) => { if (!mp.active) return; if (document.pointerLockElement !== game.canvas) { game.canvas.requestPointerLock(); return; } if (e.button === 0) { mp.net.setInput({ fire: true }); mp.net.tap(); } if (e.button === 2) mp.net.input.aim = !mp.net.input.aim; e.preventDefault(); });
+    on(game.canvas, 'mousedown', (e) => { if (!mp.active) return; if (document.pointerLockElement !== game.canvas) { game.canvas.requestPointerLock(); return; } if (e.button === 0) { if (!(mp.net.me.pp > 0 || mp.net.me.dp > 0)) { mp.net.setInput({ fire: true }); mp.net.tap(); } } if (e.button === 2) mp.net.input.aim = !mp.net.input.aim; e.preventDefault(); });
     on(document, 'mouseup', (e) => { if (mp.active && e.button === 0) mp.net.setInput({ fire: false }); });
     on(document, 'mousemove', (e) => { if (mp.active && document.pointerLockElement === game.canvas) mp.net.look(e.movementX, e.movementY); });
     on(window, 'blur', () => { keys = {}; });
@@ -140,13 +140,17 @@ export function createMultiplayer(game, THREE) {
     const net = mp.net; if (!net) return;
     const k = keys;
     net.setInput({ f: (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), r: (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0), j: !!k.Space, c: !!(k.ShiftLeft || k.ShiftRight), rl: !!k.KeyR, use: !!k.KeyE });
+    const busy = (net.me.pp > 0 || net.me.dp > 0) && net.alive; if (busy) net.setInput({ fire: false });
     net.update(dt);
+    game.plantT = busy ? 1 : 0; try { game.plantAnimTick(dt); } catch (er) {}
     const e = net.eye(), cam = game.camera;
     cam.position.set(e.x, e.y, e.z); cam.rotation.order = 'YXZ'; cam.rotation.set(e.pitch, e.yaw, 0);
-    const want = new Set();
-    for (const p of net.remotes()) {
+    const want = new Set(); const rem = net.remotes(); let spec = null;
+    if (!net.alive && net.phase !== 'waiting') spec = rem.find((r) => r.team === net.team && r.alive && r.connected !== false) || null;
+    if (spec) { cam.position.set(spec.x, spec.y + (spec.crouched ? 1.1 : 1.6), spec.z); cam.rotation.set(spec.pitch, spec.yaw, 0); }
+    for (const p of rem) {
       want.add(p.id); const r = charFor(p);
-      r.ch.group.visible = p.alive && p.connected !== false; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
+      r.ch.group.visible = p.alive && p.connected !== false && p !== spec; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
       const sp = dt > 0 ? Math.hypot(p.x - r.lx, p.z - r.lz) / dt : 0; r.lx = p.x; r.lz = p.z; r.sp = (r.sp || 0) + (sp - (r.sp || 0)) * 0.3;
       try { r.ch.update(dt, { speed: r.sp, aiming: false, pitch: p.pitch, reloading: false, weapon: WEAPON_ORDER[p.weapon], alive: p.alive }); } catch (er) {}
       v3.set(p.x, p.y + 2.1, p.z).project(cam); const vis = r.ch.group.visible && v3.z < 1;
@@ -154,7 +158,7 @@ export function createMultiplayer(game, THREE) {
     }
     for (const [id, r] of remotes) if (!want.has(id)) { game.scene.remove(r.ch.group); r.tag.remove(); remotes.delete(id); }
     // viewmodel
-    try { const wi = WEAPON_ORDER[net.me.weapon]; if (wi && game.vm.current !== wi) game.vm.setWeapon(wi); game.vm.group.visible = net.alive; game.vm.update(dt, { speed: e.speed, grounded: e.grounded, crouched: e.crouched, aiming: net.input.aim }); } catch (er) {}
+    try { const wi = WEAPON_ORDER[net.me.weapon]; if (wi && game.vm.current !== wi) game.vm.setWeapon(wi); game.vm.group.visible = net.alive && !(game.handBomb && game.handBomb.hid); game.vm.update(dt, { speed: e.speed, grounded: e.grounded, crouched: e.crouched, aiming: net.input.aim }); } catch (er) {}
     cam.fov = net.input.aim ? 30 : 75; cam.updateProjectionMatrix();
     // HUD
     const q = (c) => hud.querySelector('.' + c);
@@ -165,7 +169,7 @@ export function createMultiplayer(game, THREE) {
     q('net').textContent = Math.round(net.rttMs) + ' ms';
     if (msgT > 0) { msgT -= dt; q('msg').textContent = msgT > 0 ? lastMsg : ''; } else if (lastMsg && msgT <= 0 && lastMsg.indexOf('Reconnecting') < 0) q('msg').textContent = '';
     else q('msg').textContent = lastMsg;
-    if (!net.alive && net.phase === 'live') q('msg').textContent = 'You are dead. Waiting for the round to end';
+    if (!net.alive && net.phase === 'live') q('msg').textContent = spec ? 'Spectating ' + spec.name : 'You are dead. Waiting for the round to end';
     game.renderMP();
   };
 
