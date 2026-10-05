@@ -28,6 +28,22 @@ const CSS = `
 .mp-hud .rc{position:absolute;left:14px;top:12px;font-size:12px;opacity:.7;letter-spacing:.12em}
 .mp-hud .cr{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
 .mp-hud .tag{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:600;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.4);white-space:nowrap}
+
+.mp{justify-content:flex-start;background:radial-gradient(ellipse at 72% 45%,#2b3560 0%,#141a33 45%,#070a14 100%)}
+.mp:after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(0,0,0,.65) 100%);pointer-events:none}
+.mp-card{position:relative;z-index:2;background:none;border:0;box-shadow:none;border-radius:0;width:min(520px,92vw);margin-left:clamp(20px,6vw,90px);padding:0}
+.mp-card h2{font-family:Teko,Fredoka,Impact,sans-serif;font-size:clamp(44px,8vh,80px);font-weight:600;letter-spacing:.12em;line-height:1;margin-bottom:2px;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+.mp-card h2:before{content:'';display:block;width:64px;height:4px;background:#ff8a2a;margin-bottom:10px}
+.mp-card p{opacity:.65;font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+.mp-card label{font-size:11px;letter-spacing:.24em;color:#ffb35c;opacity:.9}
+.mp-card input{border:0;border-bottom:2px solid rgba(255,255,255,.3);border-radius:0;background:rgba(255,255,255,.05);letter-spacing:.12em;text-transform:uppercase}
+.mp-card input:focus{border-bottom-color:#ff8a2a}
+.mp-btn{background:transparent;color:#cfd6ea;border:0;border-left:3px solid transparent;border-radius:0;text-align:left;font-weight:500;text-transform:uppercase;letter-spacing:.14em;padding:9px 14px;transition:padding .12s,background .12s}
+.mp-btn:hover,.mp-btn:not(.alt){background:linear-gradient(90deg,#ff8a2a,#ff6a1a 70%,rgba(255,106,26,0));color:#fff;border-left-color:#ffd166;text-shadow:0 1px 6px rgba(0,0,0,.4)}
+.mp-btn.alt{background:transparent;color:#cfd6ea}.mp-btn.alt:hover{background:linear-gradient(90deg,rgba(255,138,42,.7),rgba(255,106,26,0));color:#fff;padding-left:20px}
+.mp-btn:disabled{opacity:.35}
+.mp-c{text-align:left}.mp-spin{margin:6px 0 16px}
+.mp-code{font-family:Teko,Fredoka,sans-serif}
 `;
 const el = (h, c) => { const d = document.createElement('div'); if (c) d.className = c; if (h != null) d.innerHTML = h; return d; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
