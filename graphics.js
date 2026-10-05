@@ -136,7 +136,7 @@ export function applyLook(THREE, renderer, scene, map, opts = {}) {
     if (l.isDirectionalLight) {
       l.color.set(P.sun); l.intensity = 1.9; l.position.copy(sunDir).multiplyScalar(MAXY);
       l.castShadow = true; l.shadow.mapSize.set(2048, 2048); l.shadow.radius = 3.5; l.shadow.blurSamples = 12;
-      l.shadow.bias = -0.0008; l.shadow.normalBias = 0.09;
+      l.shadow.bias = -0.004; l.shadow.normalBias = 0.32;
       const s = l.shadow.camera; s.left = -48; s.right = 48; s.top = 48; s.bottom = -48; s.near = 1; s.far = 140; s.updateProjectionMatrix();
     }
   });
