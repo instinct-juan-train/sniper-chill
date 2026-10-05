@@ -29,6 +29,7 @@ const CSS = `
 @media(max-width:760px){.mn-char{width:100%;opacity:.35}.mn-pan{right:14px;left:14px;top:62%}}
 `;
 const ICONS = {
+  nuke: '<svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="22" fill="none" stroke-width="3"/><circle cx="27" cy="27" r="4"/><path d="M27 27L15 7a23 23 0 0 1 24 0zM27 27l12 20a23 23 0 0 1-24 0zM27 27L51 27a23 23 0 0 1-12 20z" opacity="0"/><path d="M27 27L16 8a22 22 0 0 1 22 0z"/><path d="M27 27L16 8a22 22 0 0 1 22 0z" transform="rotate(120 27 27)"/><path d="M27 27L16 8a22 22 0 0 1 22 0z" transform="rotate(240 27 27)"/></svg>',
   uav: '<svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="6"/><path d="M14 27a13 13 0 0 1 13-13M8 27A19 19 0 0 1 27 8M40 27a13 13 0 0 1-13 13M46 27a19 19 0 0 1-19 19"/></svg>',
   missile: '<svg viewBox="0 0 54 54"><path d="M27 6c8 8 9 20 5 30H22c-4-10-3-22 5-30z"/><circle cx="27" cy="22" r="3.5"/><path d="M22 36l-7 7M32 36l7 7M27 40v8"/></svg>',
   rc: '<svg viewBox="0 0 54 54"><path d="M8 34h38v-8l-8-4h-14l-6 4H8z"/><circle cx="17" cy="38" r="4.5"/><circle cx="37" cy="38" r="4.5"/><path d="M27 18V8M23 8h8"/></svg>',
@@ -40,6 +41,7 @@ export const STREAK_INFO = [
   { id: 'missile', name: 'Guided missile', at: 5, key: '5', desc: 'Steer a missile down from the sky and crash it wherever you like.' },
   { id: 'rc', name: 'RC bomb car', at: 7, key: '6', desc: 'Drive an explosive little car into the bots.' },
   { id: 'airstrike', name: 'Airstrike', at: 9, key: '7', desc: 'Mark a spot and bomb it in a line.' },
+  { id: 'nuke', name: 'Tactical nuke', at: 10, key: '8', desc: 'Everyone goes boom. You win the round.' },
 ];
 export function buildMenu(game, THREE, createCharacter, ROSTER) {
   if (!document.getElementById('mn-css')) { const s = document.createElement('style'); s.id = 'mn-css'; s.textContent = CSS; document.head.appendChild(s); }

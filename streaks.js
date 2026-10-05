@@ -8,12 +8,14 @@ export const DEFAULT_CONFIG = {
     { id: 'missile', at: 5, key: 'Digit5' },
     { id: 'rc', at: 7, key: 'Digit6' },
     { id: 'airstrike', at: 9, key: 'Digit7' },
+    { id: 'nuke', at: 10, key: 'Digit8' },
   ],
   callKey: 'KeyG',            // calls the first available reward (in `rewards` order)
   countStreakKills: false,    // do kills made by streaks feed the counter?
   loop: false,                // after the last reward, restart the counter from 0
   selfDamage: false,          // blasts hurt the player (not implemented: reserved)
-  names: { uav: 'Radar UAV', missile: 'Guided missile', rc: 'RC bomb car', airstrike: 'Airstrike' },
+  names: { uav: 'Radar UAV', missile: 'Guided missile', rc: 'RC bomb car', airstrike: 'Airstrike', nuke: 'Tactical nuke' },
+  nuke: { countdown: 4 },
   uav: { duration: 20, alertBots: true, alertRadius: 30 },
   missile: { speed: 50, boost: 90, lifetime: 20, startHeight: 150, startBack: 10, startPitch: -1.1, blastRadius: 9, maxDamage: 140, minDamage: 40, alertBots: true },
   rc: { speed: 10, boost: 17, turnRate: 2.4, lifetime: 25, blastRadius: 6, maxDamage: 130, minDamage: 40, contactRadius: 1.15, engineNoise: true },
@@ -32,16 +34,18 @@ const CSS = `
 .sk .tab .th.l{left:-16px;transform:rotate(18deg)}.sk .tab .th.r{right:-16px;transform:rotate(-18deg)}
 
 .sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none}
-.sk .tray{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;flex-direction:row;gap:12px;align-items:flex-end}
-.sk .slot{position:relative;width:62px;height:62px;border-radius:12px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
-.sk .slot svg{width:38px;height:38px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.5))}
-.sk .slot .k{position:absolute;top:-7px;left:-7px;background:#ffd166;color:#222;border-radius:7px;padding:0 8px;font-size:14px;font-weight:800;line-height:20px;text-shadow:none}
-.sk .slot .t{font-size:12px;font-weight:700;letter-spacing:.03em;opacity:1;margin-top:1px}
-.sk .slot .n{position:absolute;right:5px;bottom:2px;font-size:13px}
-.sk .slot.have{background:rgba(255,209,102,.28);border-color:#ffd166;transform:translateY(-8px) scale(1.1);animation:skp .9s ease-in-out infinite;box-shadow:0 0 14px 2px rgba(255,209,102,.75)}
+.sk .tray{position:absolute;right:14px;top:84px;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.sk .slot{position:relative;overflow:hidden;width:46px;height:46px;border-radius:10px;background:rgba(10,14,30,.62);border:2px solid rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
+.sk .slot svg{width:26px;height:26px;position:relative;z-index:1;opacity:.55;filter:drop-shadow(0 2px 0 rgba(0,0,0,.5))}
+.sk .slot .k{position:absolute;top:1px;left:1px;z-index:2;background:rgba(0,0,0,.55);color:#fff;border-radius:5px;padding:0 4px;font-size:10px;font-weight:800;line-height:14px;text-shadow:none}
+.sk .slot .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(255,209,102,.42);transition:height .35s}
+.sk .slot .t{position:relative;z-index:1;font-size:9px;font-weight:700;letter-spacing:.03em;opacity:1;margin-top:1px}
+.sk .slot .n{position:absolute;z-index:2;right:3px;bottom:0;font-size:11px}
+.sk .slot.have{background:rgba(255,209,102,.3);border-color:#ffd166;transform:translateX(-6px);animation:skp .9s ease-in-out infinite;box-shadow:0 0 12px 2px rgba(255,209,102,.75)}.sk .slot.have svg{opacity:1}
 .sk .slot.act{background:rgba(82,240,160,.35);border-color:#52f0a0}
-@keyframes skp{50%{box-shadow:0 0 26px 7px rgba(255,209,102,.95);background:rgba(255,209,102,.55)}}
-.sk .streak{position:absolute;right:12px;top:calc(13% - 26px);font-weight:700;font-size:12px;letter-spacing:.14em;text-shadow:0 2px 0 rgba(0,0,0,.55);display:flex;gap:6px;align-items:center}
+@keyframes skp{50%{box-shadow:0 0 20px 5px rgba(255,209,102,.95);background:rgba(255,209,102,.5)}}
+.sk .nukefl{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
+.sk .streak{display:none!important;position:absolute;right:12px;top:calc(13% - 26px);font-weight:700;font-size:12px;letter-spacing:.14em;text-shadow:0 2px 0 rgba(0,0,0,.55);display:flex;gap:6px;align-items:center}
 .sk .streak .pip{display:none}
 .sk .pip{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.7)}
 .sk .pip.on{background:#ffd166;border-color:#fff}.sk .pip.mark{border-color:#ffd166;border-radius:3px}
@@ -69,6 +73,8 @@ const ICON = {
   uav: '<svg viewBox="0 0 40 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="20" cy="22" r="14" stroke-opacity=".45"/><circle cx="20" cy="22" r="8" stroke-opacity=".7"/><path d="M20 22L31 11" stroke="#7dffb0"/><circle cx="20" cy="22" r="2.5" fill="#fff" stroke="none"/><circle cx="12" cy="27" r="2.2" fill="#ff6b6b" stroke="none"/><circle cx="27" cy="29" r="2.2" fill="#ff6b6b" stroke="none"/></svg>',
   missile: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.4" stroke-linejoin="round"><g transform="rotate(40 20 20)"><path d="M20 3c4 4 5 9 5 15v12H15V18c0-6 1-11 5-15z" fill="#fff"/><path d="M20 3c3 3 4.5 7 4.8 11h-9.6c.3-4 1.8-8 4.8-11z" fill="#ff6b6b"/><path d="M15 24l-6 8h6zM25 24l6 8h-6z" fill="#ffd166"/><path d="M17 30h6l-3 7z" fill="#ff9a3c"/></g></svg>',
   rc: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.4" stroke-linejoin="round"><path d="M5 24l3-7h16l5 5h6v6H5z" fill="#ffd166"/><path d="M11 17l2-4h8l3 4z" fill="#9ad1ff"/><circle cx="12" cy="28" r="5" fill="#444"/><circle cx="30" cy="28" r="5" fill="#444"/><circle cx="12" cy="28" r="1.8" fill="#ccc" stroke="none"/><circle cx="30" cy="28" r="1.8" fill="#ccc" stroke="none"/><path d="M28 17l3-9" stroke="#fff" stroke-width="2"/><circle cx="31" cy="7" r="2" fill="#ff6b6b"/></svg>',
+  nuke: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.3" stroke-linejoin="round"><circle cx="20" cy="20" r="17" fill="#ffd166"/><g fill="#222"><path d="M20 20L11.3 4.9A17.4 17.4 0 0 1 28.7 4.9Z"/><path d="M20 20L28.7 4.9A17.4 17.4 0 0 1 37.4 20Z" transform="rotate(120 20 20)"/><path d="M20 20L28.7 4.9A17.4 17.4 0 0 1 37.4 20Z" transform="rotate(-120 20 20) translate(0 0)" opacity="0"/><path d="M20 20L11.3 4.9A17.4 17.4 0 0 1 28.7 4.9Z" transform="rotate(120 20 20)"/><path d="M20 20L11.3 4.9A17.4 17.4 0 0 1 28.7 4.9Z" transform="rotate(240 20 20)"/></g><circle cx="20" cy="20" r="3.4" fill="#ffd166"/></svg>',
+
   airstrike: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.3" stroke-linejoin="round"><g fill="#fff"><path d="M8 4l4 0 2 11-4 0z" transform="rotate(-12 11 10)"/><path d="M18 2l4 0 1 13-6 0z"/><path d="M28 4l4 0-2 11-4 0z" transform="rotate(12 29 10)"/></g><g fill="#ff6b6b" stroke="none"><circle cx="11" cy="31" r="4"/><circle cx="20" cy="33" r="4"/><circle cx="29" cy="31" r="4"/></g><path d="M5 37h30" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
 };
 const mm = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -102,7 +108,7 @@ export function createStreaks(ctx) {
   const slots = {};
   for (const r of cfg.rewards) {
     const el = document.createElement('div'); el.className = 'slot';
-    el.innerHTML = `<span class="k">${r.key.replace('Digit', '').replace('Key', '')}</span>${ICON[r.id] || ''}<span class="t">${r.at} kills</span><span class="n"></span>`;
+    el.innerHTML = `<span class="k">${r.key.replace('Digit', '').replace('Key', '')}</span>${ICON[r.id] || ''}<span class="t">${r.at}</span><i class="fill"></i><span class="n"></span>`;
     tray.appendChild(el); slots[r.id] = el;
   }
   let bannerT = 0;
@@ -116,6 +122,7 @@ export function createStreaks(ctx) {
       const n = S.inv[r.id] || 0, el = slots[r.id];
       el.classList.toggle('have', n > 0); el.classList.toggle('act', S.active && S.active.id === r.id || (r.id === 'uav' && !!S.uav));
       el.querySelector('.n').textContent = n > 1 ? '×' + n : '';
+      const prev = Math.max(0, ...cfg.rewards.filter((q) => q.at < r.at).map((q) => q.at)); el.querySelector('.fill').style.height = (n > 0 ? 100 : Math.max(0, Math.min(1, (S.count - prev) / (r.at - prev))) * 100) + '%';
     }
   }
 
@@ -497,6 +504,24 @@ export function createStreaks(ctx) {
     c.textAlign = 'right'; c.fillText('ALT 58 m  ·  ' + new Date().toTimeString().slice(0, 8), W - 28, 38);
     c.textAlign = 'left'; c.fillText(`TGT  X ${T.x.toFixed(0)}  Z ${T.z.toFixed(0)}`, 28, H - 28);
   }
+  // ---------- tactical nuke ----------
+  function startNuke() {
+    S.nuke = { t: 0, n: -1 }; emit('called', { id: 'nuke' });
+    if (!S.nukeFl) { S.nukeFl = document.createElement('div'); S.nukeFl.className = 'nukefl'; dom.appendChild(S.nukeFl); }
+  }
+  function updateNuke(dt) {
+    const N = S.nuke, c = cfg.nuke.countdown; N.t += dt;
+    const left = Math.ceil(c - N.t);
+    if (N.t < c && left !== N.n) { N.n = left; showBanner('TACTICAL NUKE', 'Detonation in ' + left, 1.2); try { ctx.play && ctx.play('beep'); } catch (e) {} }
+    if (N.t >= c && !N.fired) {
+      N.fired = true; S.shake = 3; S.nukeFl.style.transition = 'none'; S.nukeFl.style.opacity = '1';
+      let killed = 0; for (const b of bots.list) { if (!b.alive) continue; const k = damageBot(b, 9999, { source: 'nuke', position: center(b) }); if (k) { killed++; emit('kill', { bot: b, source: 'nuke', streakId: 'nuke' }); if (ctx.onKill) ctx.onKill({ bot: b, source: 'nuke', streakId: 'nuke' }); } }
+      emit('explosion', { position: { x: 0, y: 0, z: 0 }, radius: 0, source: 'nuke' });
+      showBanner('NUKE', 'Everyone is gone. Round won.', 3);
+      requestAnimationFrame(() => { S.nukeFl.style.transition = 'opacity 2.2s ease-out'; S.nukeFl.style.opacity = '0'; });
+    }
+    if (N.t > c + 1) S.nuke = null;
+  }
   // ---------- API ----------
   function call(id) {
     if (!S.enabled || (S.active || S.finish || S.tablet) && id !== 'uav') return false;
@@ -504,6 +529,7 @@ export function createStreaks(ctx) {
     if (!(S.inv[id] > 0)) return false;
     S.inv[id]--; look.dx = look.dy = 0;
     if (id === 'uav') { startUav(); emit('called', { id }); showBanner('UAV active', `Enemies revealed for ${cfg.uav.duration} s`, 1.8); }
+    else if (id === 'nuke') startNuke();
     else if (id === 'missile' || id === 'airstrike') openTablet(id); else if (id === 'rc') startRc();
     else return false;
     refreshHud(); return true;
@@ -513,7 +539,7 @@ export function createStreaks(ctx) {
     for (const d of S.missiles) scene.remove(d.m); S.missiles.length = 0; if (S.heli) { scene.remove(S.heli.g); S.heli = null; }
     if (S.active) { const k = S.active.id; if (S.active.mesh) scene.remove(S.active.mesh); if (S.active.ring) scene.remove(S.active.ring); endControl(k, reason); }
     if (S.finish) { S.finish = null; S.cam = null; endControl(S.finishKind || 'unknown', reason); }
-    stopUav(reason);
+    stopUav(reason); S.nuke = null;
     for (const s of S.strikes) for (const d of s.drops) scene.remove(d.m); S.strikes.length = 0;
   }
   function reset(full = true) { cancel('reset'); S.count = 0; if (full) S.inv = {}; for (const f of S.fx) scene.remove(f.obj); S.fx.length = 0; refreshHud(); }
@@ -523,6 +549,7 @@ export function createStreaks(ctx) {
     if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) banner.classList.remove('on'); }
     for (let i = S.fx.length - 1; i >= 0; i--) { const f = S.fx[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.fn(k, dt); if (k >= 1) { scene.remove(f.obj); S.fx.splice(i, 1); } }
     if (S.uav) updateUav(dt);
+    if (S.nuke) updateNuke(dt);
     updateStrikes(dt); updateMissiles(dt); updateHeli(dt);
     if (S.tablet) { drawTablet(dt); if (S.tablet && S.tablet.closing) { S.tablet.closing -= dt; if (S.tablet.closing <= 0) { const p = S.tablet.pick; closeTablet(false); launchPick(p); } } }
     if (S.active) {

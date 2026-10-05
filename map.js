@@ -77,7 +77,7 @@ export function buildMap(THREE, layout = KITE_GARDEN_V4) {
     vbox(x0 - .35, z0 - .35, x1 + .35, z1 + .35, y0 + h + .35, y0 + h + .5, rc);
     vbox(x0 - .35, z0 - .35, x1 + .35, z0 - .2, y0 + h + .5, y0 + h + .8, 'cream'); vbox(x0 - .35, z1 + .2, x1 + .35, z1 + .35, y0 + h + .5, y0 + h + .8, 'cream');
     vbox(x0 - .35, z0 - .2, x0 - .2, z1 + .2, y0 + h + .5, y0 + h + .8, 'cream'); vbox(x1 + .2, z0 - .2, x1 + .35, z1 + .2, y0 + h + .5, y0 + h + .8, 'cream');
-    vbox(x0 + 1, z0 + 1, x1 - 1, z1 - 1, y0 + .02, y0 + .045, b.floor || 'wood', true);
+    vbox(x0 + 1, z0 + 1, x1 - 1, z1 - 1, y0 + .004, y0 + .012, b.floor || 'wood', true);
     for (const k of ['N', 'S', 'W', 'E']) for (const q of b.doors?.[k] || []) { // striped awnings above doors, head-height clear
       const a = (q[0] + q[1]) / 2, w = q[1] - q[0] + .6, d = 1.1, ac = b.awning || 'gold';
       if (k === 'N') vbox(a - w / 2, z0 - d, a + w / 2, z0, y0 + 3.0, y0 + 3.15, ac, true); if (k === 'S') vbox(a - w / 2, z1, a + w / 2, z1 + d, y0 + 3.0, y0 + 3.15, ac, true);
@@ -88,7 +88,7 @@ export function buildMap(THREE, layout = KITE_GARDEN_V4) {
     const h = m.h || 4.4;
     for (const r of m.rects) sbox(r[0], r[1], r[2], r[3], 0, h, m.color || 'cream', m.name || 'tunnel wall');
     for (const r of m.ceil) sbox(r[0], r[1], r[2], r[3], m.ceilY || 3, h, m.color || 'cream', 'tunnel roof');
-    for (const r of m.ceil) vbox(r[0], r[1], r[2], r[3], .02, .045, m.floor || 'stone', true);
+    for (const r of m.ceil) vbox(r[0], r[1], r[2], r[3], .004, .012, m.floor || 'stone', true);
     for (const r of m.rects) { vbox(r[0] - .25, r[1] - .25, r[2] + .25, r[3] + .25, h, h + .15, m.roof || 'roof'); }
   }
   function block(x0, z0, x1, z1, h, color = 'edge', top = 'tile', name = 'terrace') {

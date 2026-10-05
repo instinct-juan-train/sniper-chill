@@ -70,6 +70,16 @@ export class Game {
   constructor(root) {
     this.root = root; root.classList.add('sg');
     if (!document.getElementById('sg-css')) { const s = document.createElement('style'); s.id = 'sg-css'; s.textContent = CSS; document.head.appendChild(s); }
+
+    { const s = document.createElement('style'); s.id = 'sg-css2'; s.textContent = `@import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;600&display=swap');
+.sc-hud:before{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;background:linear-gradient(transparent,rgba(4,8,16,.5));pointer-events:none}
+.sc-hud .sc-hp-track{background:rgba(6,10,20,.82);border-color:#fff}
+.sc-hud .sc-hp-label,.sc-hud .sc-ammo,.sc-hud .sc-ammo-w,.sc-hud .sc-bomb{text-shadow:0 0 3px #000,0 1px 3px #000,0 2px 8px rgba(0,0,0,.8);opacity:1}
+.sc-hud .sc-ammo-n{filter:drop-shadow(0 2px 3px rgba(0,0,0,.9))}
+.sk .slot{background:rgba(6,10,20,.82)!important}.sk .slot.have{background:rgba(120,90,10,.85)!important}
+.sc-economy .eco-chip{background:none!important;border:0!important;box-shadow:none!important;padding:0 6px!important;color:#ffe9a8!important;font-family:Teko,'Bebas Neue',Impact,'Arial Narrow',sans-serif!important;font-weight:600;letter-spacing:.04em;text-shadow:0 0 3px #000,0 2px 6px rgba(0,0,0,.85)}
+.sc-economy .eco-chip strong{font-size:40px!important;font-weight:600;line-height:1}.sc-economy .eco-chip span{display:none}
+.sg .info{text-shadow:0 0 3px #000,0 1px 4px #000}`; document.head.appendChild(s); }
     this.canvas = document.createElement('canvas'); this.canvas.className = 'main'; root.appendChild(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
     this.scene = new THREE.Scene();
