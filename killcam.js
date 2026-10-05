@@ -1,4 +1,4 @@
-/* killcam.js - Sniper Chill: visible bullets, slow-motion kill cam, ragdoll death, shareable replay.
+/* killcam.js - ChillOps: visible bullets, slow-motion kill cam, ragdoll death, shareable replay.
  * Dependency-free ES module (needs only the THREE namespace you already load). Stylized, no gore.
  *
  * ---------------------------------------------------------------------------------------------
@@ -45,11 +45,11 @@ const DEFAULTS = {
   colors: { bullet: 0xffd479, trail: 0xff7ac8, ring: 0x7ae7ff, head: 0xffd479, body: 0x7ae7ff },
 };
 const T = {
-  es: { head: 'HEADSHOT', body: 'BAJA', share: 'Compartir clip', save: 'Guardar', ready: 'Replay listo', shareText: 'Mi killcam en Sniper Chill' },
-  en: { head: 'HEADSHOT', body: 'ELIMINATED', share: 'Share clip', save: 'Save', ready: 'Replay ready', shareText: 'My Sniper Chill killcam' },
+  es: { head: 'HEADSHOT', body: 'BAJA', share: 'Compartir clip', save: 'Guardar', ready: 'Replay listo', shareText: 'Mi killcam en ChillOps' },
+  en: { head: 'HEADSHOT', body: 'ELIMINATED', share: 'Share clip', save: 'Save', ready: 'Replay ready', shareText: 'My ChillOps killcam' },
 };
 const CSS = `
-.kc-ui{position:absolute;inset:0;pointer-events:none;z-index:40;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.kc-ui{position:absolute;inset:0;pointer-events:none;z-index:40;overflow:hidden;font-family:Fredoka,system-ui,-apple-system,Segoe UI,sans-serif}
 .kc-ui .bar{position:absolute;left:0;right:0;height:11%;background:#000;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
 .kc-ui .top{top:0;transform:translateY(-101%)}.kc-ui .bot{bottom:0;transform:translateY(101%)}
 .kc-ui.on .bar{transform:none}
@@ -449,7 +449,7 @@ export function createKillCam(THREE, opts) {
     clear() { if (cine) { cine.t = cine.total; } [...bullets].forEach((b) => { scene.remove(b.g, b.trail); }); bullets.length = 0; parts.splice(0).forEach((p) => scene.remove(p.m)); rings.splice(0).forEach((r) => scene.remove(r.m)); sprites.splice(0).forEach((s) => scene.remove(s.s)); decals.splice(0).forEach((d) => scene.remove(d.m)); ragdolls.splice(0).forEach(killRag); },
     async share() {
       const r = lastReplay; if (!r) return false; const file = new File([r.blob], r.filename, { type: r.mime });
-      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Sniper Chill', text: str().shareText + ' ' + location.href }); return true; } } catch (e) { if (e && e.name === 'AbortError') return false; }
+      try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'ChillOps', text: str().shareText + ' ' + location.href }); return true; } } catch (e) { if (e && e.name === 'AbortError') return false; }
       api.download(); return false;
     },
     download() { const r = lastReplay; if (!r) return; const a = document.createElement('a'); a.href = r.url; a.download = r.filename; document.body.appendChild(a); a.click(); a.remove(); },

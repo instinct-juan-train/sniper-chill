@@ -172,6 +172,7 @@ export function createController(initialColliders=[], options={}) {
   const api={state,update,look,connect,
     setInput(input){manual={...manual,...input};},
     setColliders(next){colliders=next||[];},
+    setSensitivity(v){if(Number.isFinite(v)&&v>0)opt.sensitivity=v;},
     setEnabled(value){enabled=!!value;if(!enabled){held.clear();manual={forward:0,right:0,jump:false,sprint:false,crouch:false};}},
     teleport(position,rotation={}){Object.assign(p,position);v.x=v.y=v.z=0;grounded=false;coyote=jumpBuffer=0;if(rotation.yaw!==undefined)yaw=rotation.yaw;if(rotation.pitch!==undefined)pitch=clamp(rotation.pitch,-1.55,1.55);sync();},
     getDirection(){const cp=Math.cos(pitch);return{x:-Math.sin(yaw)*cp,y:Math.sin(pitch),z:-Math.cos(yaw)*cp};},

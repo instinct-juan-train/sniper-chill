@@ -297,19 +297,19 @@ export function createWeaponSystem(THREE, vm, hud) {
 export function createHUD(container = document.body) {
   const css = document.createElement('style');
   css.textContent = `
-.sc-hud{position:absolute;inset:0;pointer-events:none;font-family:system-ui,sans-serif;color:#fff;z-index:20;user-select:none}
+.sc-hud{position:absolute;inset:0;pointer-events:none;font-family:Fredoka,system-ui,sans-serif;color:#fff;z-index:20;user-select:none}
 .sc-hp{position:absolute;left:24px;bottom:24px;width:240px}
 .sc-hp-label{font-weight:800;font-size:13px;letter-spacing:.12em;opacity:.85;margin-bottom:4px;text-shadow:0 2px 0 rgba(0,0,0,.4)}
-.sc-hp-track{height:18px;border-radius:12px;background:rgba(10,14,30,.55);border:2px solid rgba(255,255,255,.55);overflow:hidden}
+.sc-hp-track{position:relative;height:24px;box-sizing:border-box;border-radius:14px;background:rgba(10,14,30,.55);border:2px solid rgba(255,255,255,.7);overflow:hidden}
 .sc-hp-fill{height:100%;width:100%;background:#52f0a0;border-radius:10px;transition:width .15s,background .2s}
-.sc-hp-num{position:absolute;right:8px;top:18px;font-weight:800;font-size:12px;text-shadow:0 1px 2px #000}
+.sc-hp-num{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;line-height:1;text-shadow:0 1px 2px #000,0 0 3px #000}
 .sc-ammo{position:absolute;right:28px;bottom:24px;text-align:right;text-shadow:0 2px 0 rgba(0,0,0,.45)}
 .sc-ammo-n{font-size:44px;font-weight:900;line-height:1}.sc-ammo-n small{font-size:20px;opacity:.7}
 .sc-ammo-w{font-size:13px;font-weight:700;letter-spacing:.1em;opacity:.85}
 .sc-ammo.low .sc-ammo-n{color:#ff6b6b}
 .sc-ch{position:absolute;left:50%;top:50%;width:0;height:0}
 .sc-ch i{position:absolute;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
-.sc-ch .t{width:2px;height:7px;left:-1px}.sc-ch .l{width:7px;height:2px;top:-1px}
+.sc-ch .t{width:2px;height:8px;left:-1px}.sc-ch .l{width:8px;height:2px;top:-1px}.sc-ch .d{width:2px;height:2px;left:-1px;top:-1px;border-radius:50%}
 .sc-hit{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;opacity:0;transition:opacity .25s}
 .sc-hit.on{opacity:1;transition:none}
 .sc-hit:before,.sc-hit:after{content:"";position:absolute;left:12px;top:-2px;width:2px;height:30px;background:var(--c,#fff);transform:rotate(45deg)}
@@ -327,9 +327,9 @@ export function createHUD(container = document.body) {
   const root = document.createElement('div'); root.className = 'sc-hud';
   root.innerHTML = `
 <div class="sc-flash"></div><div class="sc-scope"><b></b></div>
-<div class="sc-ch"><i class="t" style="top:-14px"></i><i class="t" style="top:7px"></i><i class="l" style="left:-14px"></i><i class="l" style="left:7px"></i></div>
+<div class="sc-ch"><i class="t" style="top:-12px"></i><i class="t" style="top:4px"></i><i class="l" style="left:-12px"></i><i class="l" style="left:4px"></i><i class="d"></i></div>
 <div class="sc-hit"></div><div class="sc-bomb"></div><div class="sc-reload">RELOADING...</div>
-<div class="sc-hp"><div class="sc-hp-label">HEALTH</div><div class="sc-hp-track"><div class="sc-hp-fill"></div></div><div class="sc-hp-num"></div></div>
+<div class="sc-hp"><div class="sc-hp-label">HEALTH</div><div class="sc-hp-track"><div class="sc-hp-fill"></div><div class="sc-hp-num"></div></div></div>
 <div class="sc-ammo"><div class="sc-ammo-n"></div><div class="sc-ammo-w"></div></div>`;
   if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
   container.appendChild(root);
@@ -349,9 +349,10 @@ export function createHUD(container = document.body) {
     },
     setScope(on, t = on ? 1 : 0) { scope.style.opacity = t; root.querySelector('.sc-hp').style.opacity = on ? 0.5 : 1; },
     setCrosshair(px, visible = true) {
-      ch.style.display = visible ? '' : 'none'; const o = Math.max(0, Math.min(40, px));
-      const [t1, t2, l1, l2] = ch.children; t1.style.top = -7 - o - 7 + 'px'; t2.style.top = o + 'px';
-      l1.style.left = -7 - o - 7 + 'px'; l2.style.left = o + 'px';
+      ch.style.display = visible ? '' : 'none'; const o = Math.round(Math.max(0, Math.min(40, px)));
+      const w = root.clientWidth, h = root.clientHeight; ch.style.left = Math.round(w / 2) + 'px'; ch.style.top = Math.round(h / 2) + 'px';
+      const [t1, t2, l1, l2] = ch.children, g = 4 + o, L = 8; // equal ticks, equal gap g on all four sides
+      t1.style.top = -g - L + 'px'; t2.style.top = g + 'px'; l1.style.left = -g - L + 'px'; l2.style.left = g + 'px';
     },
     hitMarker(kill = false, head = false) {
       hit.style.setProperty('--c', kill ? '#ff3b3b' : head ? '#ffd24a' : '#fff');

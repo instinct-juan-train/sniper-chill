@@ -1,1 +1,3 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,init</head>
+# ChillOps (source)
+Static ES-module game. Open index.html via any static server. Live build: https://instinct-juan-train.github.io/sniper-chill/
+three.module.min.js = three.js r160.

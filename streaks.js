@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG = {
 };
 
 const CSS = `
-.sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:system-ui,sans-serif;color:#fff;user-select:none}
+.sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none}
 .sk .tray{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:10px;align-items:flex-end}
 .sk .slot{position:relative;width:64px;height:64px;border-radius:16px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
 .sk .slot svg{width:30px;height:30px}

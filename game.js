@@ -4,7 +4,7 @@ import { buildMap } from './map.js';
 import { createController } from './movement.js';
 import { raycast } from './hitscan.js';
 import { createViewmodels, createWeaponSystem, createHUD, createPlayerState, applyDamage, WEAPON_ORDER } from './player.js';
-import { initAudio, play, setListener, startAmbient } from './audio.js';
+import { initAudio, play, setListener, startAmbient, setVolume } from './audio.js';
 import { createBots } from './bots.js';
 import { createKillCam } from './killcam.js';
 import { applyLook } from './graphics.js';
@@ -16,10 +16,32 @@ import { createStreaks } from './streaks.js';
 import { createEconomy, WEAPON_STATS } from './economy.js';
 import { createDestruction } from './destruction.js';
 import { createGrenades } from './grenades.js';
+import { playIntro, menuBackdrop, logoHTML } from './intro.js';
 
 const CSS = `
-.sg{font-family:system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
+@font-face{font-family:Fredoka;font-weight:500;src:url('./Fredoka-Medium.ttf') format('truetype');font-display:swap}
+@font-face{font-family:Fredoka;font-weight:600 900;src:url('./Fredoka-Bold.ttf') format('truetype');font-display:swap}
+.sg{font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
 .sg canvas.main{width:100%;height:100%;display:block}
+.sg .scb{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:30;display:none;align-items:stretch;pointer-events:none;filter:drop-shadow(0 4px 0 rgba(0,0,0,.28));font-family:Fredoka,system-ui,sans-serif;color:#fff}
+.sg .scb small{display:block;font-size:11px;font-weight:600;letter-spacing:.14em;opacity:.9;line-height:1}
+.sg .sbt{min-width:104px;padding:7px 18px 8px;text-align:center;border:3px solid #fff;display:flex;flex-direction:column;align-items:center;gap:2px}
+.sg .sbt b{font-size:34px;line-height:1;font-weight:700;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.sg .sbt.me{background:linear-gradient(#37c97c,#1f9d5c);border-radius:20px 8px 8px 20px;border-right-width:0}
+.sg .sbt.bt{background:linear-gradient(#ff9a3c,#e06a14);border-radius:8px 20px 20px 8px;border-left-width:0}
+.sg .sbm{background:linear-gradient(#2a3b55,#1a2539);border:3px solid #fff;border-radius:12px;margin:-3px -1px;padding:8px 16px 6px;text-align:center;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:70px}
+.sg .sbm b{font-size:24px;line-height:1;font-weight:700;color:#ffd166}.sg .sbm b span{font-size:15px;opacity:.7}
+.sg .pip{display:inline-block;width:12px;height:12px;border-radius:50%;margin:0 3px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.55);box-sizing:border-box}
+.sg .pip.on{background:var(--c);border-color:#fff;box-shadow:0 0 6px var(--c)}
+.sg .setov{position:absolute;inset:0;z-index:400;background:rgba(14,22,34,.82);align-items:center;justify-content:center}
+.sg .setp{background:#1d2b3d;border:3px solid #fff;border-radius:22px;padding:22px 28px;min-width:min(420px,88vw);display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 0 rgba(0,0,0,.3)}
+.sg .setp h2{margin:0 0 4px;font-size:30px}
+.sg .sr{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:16px;text-align:left}
+.sg .sr small{opacity:.65;font-weight:500;font-size:12px}.sg .sr em{font-style:normal;color:#ffd166;float:right}
+.sg .sr:has(input[type=checkbox]){flex-direction:row;justify-content:space-between;align-items:center}
+.sg .sr input[type=checkbox]{width:24px;height:24px;accent-color:#37c97c}
+.sg .sr input[type=range]{accent-color:#ffd166;width:100%}
+.sg .sr select{font:inherit;padding:8px;border-radius:10px;border:0;background:#2e4259;color:#fff}
 .sg .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(20,30,45,.74);text-align:center;padding:16px;z-index:100}
 .sg .ov h2{margin:0;font-size:clamp(24px,4.5vw,44px)}
 .sg .ov p{margin:0;font-size:clamp(12px,1.6vw,16px);opacity:.92;max-width:680px;line-height:1.45}
@@ -86,9 +108,10 @@ export class Game {
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
     this.hint = document.createElement('div'); this.hint.style.cssText = 'position:absolute;left:50%;bottom:30%;transform:translateX(-50%);z-index:21;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;pointer-events:none'; root.appendChild(this.hint);
-    this.sb = document.createElement('div'); this.sb.style.cssText = 'position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:30;display:none;gap:14px;align-items:center;background:rgba(16,27,32,.78);border:1px solid #9cd9b655;border-radius:14px;padding:6px 16px;font:800 15px system-ui;pointer-events:none;color:#fff'; root.appendChild(this.sb);
+    this.sb = document.createElement('div'); this.sb.className = 'scb'; this.sb.style.display = 'none'; root.appendChild(this.sb);
     this.match = { p: 0, b: 0, round: 1, over: false };
-    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;right:6px;bottom:2px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
+    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;left:8px;top:8px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
+    this.setOv = document.createElement('div'); this.setOv.className = 'setov'; this.setOv.style.display = 'none'; root.appendChild(this.setOv);
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
     this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
     this.fx = []; this.cineOK = false;
@@ -99,11 +122,11 @@ export class Game {
     this.bombMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.35), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0xff0000, emissiveIntensity: 0.7 }));
     this.bombMesh.visible = false; this.scene.add(this.bombMesh);
     this.eDown = false; this.plantT = 0; this.stepT = 0; this.score = 0; this.kills = 0; this.heads = 0;
-    initAudio({ volume: 0.7, ambient: true });
+    initAudio({ volume: 0.7, ambient: true }); this.loadSettings(); this.applySettings();
     this.bindEvents(); this.resize();
     this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(root);
     this.last = performance.now(); this.running = true; this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
-    this.showMenu();
+    this.showMenu(); if (!/[?&]nointro/.test(location.search)) playIntro(root, () => {});
   }
   resize() {
     const w = this.root.clientWidth || 640, h = this.root.clientHeight || 360;
@@ -133,7 +156,7 @@ export class Game {
     });
     d.addEventListener('keydown', (e) => {
       if (this.state !== 'play') return;
-      if (e.code === 'Escape') { this.pause(); return; }
+      if (e.code === 'Escape') { if (this.setOv.style.display !== 'none') { this.closeSettings(); return; } this.pause(); return; }
       if (this.eco && this.eco.getState().menuOpen) return;
       if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary');
       if (!e.repeat && ['KeyV', 'KeyH', 'KeyJ'].includes(e.code)) { this.throwGrenade({ KeyV: 'frag', KeyH: 'smoke', KeyJ: 'flash' }[e.code]); return; }
@@ -174,10 +197,31 @@ export class Game {
   }
   matchOver() { const m = this.match; if (m.p >= 3 || m.b >= 3 || m.p + m.b >= 5) { m.over = true; return true; } return false; }
   renderSB() {
-    const m = this.match, dots = (w) => Array.from({ length: 3 }, (_, i) => `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 2px;background:${i < w ? '#ffd166' : 'rgba(255,255,255,.22)'}"></span>`).join('');
+    const m = this.match, pips = (w, c) => Array.from({ length: 3 }, (_, i) => `<i class="pip${i < w ? ' on' : ''}" style="--c:${c}"></i>`).join('');
     this.sb.style.display = this.state === 'menu' ? 'none' : 'flex';
-    this.sb.innerHTML = `<span>TÚ ${dots(m.p)}</span><b style="font-size:20px">${m.p} - ${m.b}</b><span>${dots(m.b)} BOTS</span><span style="opacity:.7">Ronda ${Math.min(5, m.round)}/5</span>`;
+    this.sb.innerHTML = `<div class="sbt me"><small>TÚ</small><b>${m.p}</b><div>${pips(m.p, '#7dffb0')}</div></div><div class="sbm"><small>RONDA</small><b>${Math.min(5, m.round)}<span>/5</span></b></div><div class="sbt bt"><small>BOTS</small><b>${m.b}</b><div>${pips(m.b, '#ffb35c')}</div></div>`;
   }
+  loadSettings() { let s = {}; try { s = JSON.parse(localStorage.getItem('sc_settings') || '{}'); } catch (e) {} this.set = Object.assign({ fps: false, sens: 1, vol: 0.7, diff: this.diff }, s); }
+  saveSettings() { try { localStorage.setItem('sc_settings', JSON.stringify(this.set)); } catch (e) {} }
+  applySettings() {
+    const s = this.set; this.perf.style.display = s.fps ? '' : 'none';
+    if (this.ctrl.setSensitivity) this.ctrl.setSensitivity(0.0022 * s.sens);
+    try { setVolume(s.vol); } catch (e) {}
+    this.diff = s.diff;
+  }
+  openSettings() {
+    const s = this.set, o = this.setOv; o.style.display = 'flex';
+    o.innerHTML = `<div class="setp"><h2>Ajustes</h2>
+<label class="sr"><span>Contador FPS / ms</span><input type="checkbox" data-k="fps" ${s.fps ? 'checked' : ''}></label>
+<label class="sr"><span>Sensibilidad <em data-v="sens">${s.sens.toFixed(2)}x</em></span><input type="range" min="0.3" max="2.5" step="0.05" value="${s.sens}" data-k="sens"></label>
+<label class="sr"><span>Volumen <em data-v="vol">${Math.round(s.vol * 100)}%</em></span><input type="range" min="0" max="1" step="0.05" value="${s.vol}" data-k="vol"></label>
+<label class="sr"><span>Dificultad bots <small>(desde la próxima ronda)</small></span><select data-k="diff"><option value="chill">Chill</option><option value="easy">Fácil</option><option value="medium">Media</option><option value="hard">Difícil</option></select></label>
+<button class="b" data-close>Volver</button></div>`;
+    o.querySelector('select').value = s.diff;
+    o.querySelectorAll('[data-k]').forEach((el) => { el.oninput = el.onchange = () => { const k = el.dataset.k; s[k] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : parseFloat(el.value); const v = o.querySelector(`[data-v="${k}"]`); if (v) v.textContent = k === 'sens' ? s.sens.toFixed(2) + 'x' : Math.round(s.vol * 100) + '%'; this.applySettings(); this.saveSettings(); }; });
+    o.querySelector('[data-close]').onclick = () => this.closeSettings();
+  }
+  closeSettings() { this.setOv.style.display = 'none'; this.setOv.innerHTML = ''; }
   setZone() {
     const sp = this.spawnT; this.zone = { x: sp.x, z: sp.z, y: sp.y, h: 2.5 };
     if (!this.zoneMesh) {
@@ -213,6 +257,7 @@ export class Game {
   }
   pick(slot) { const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
   overlay(html, btns) {
+    if (this.menuStop) { this.menuStop(); this.menuStop = null; }
     this.ov.style.display = 'flex'; this.ov.innerHTML = html;
     const row = document.createElement('div'); row.className = 'row';
     for (const [t, fn, alt] of btns) { const b = document.createElement('button'); b.className = 'b' + (alt ? ' alt' : ''); b.textContent = t; b.onclick = fn; row.appendChild(b); }
@@ -221,23 +266,25 @@ export class Game {
   showMenu() {
     this.state = 'menu'; this.sb.style.display = 'none'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
-    this.overlay(`<h2>Sniper Chill</h2><p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
-<p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> agacharte</p>
-<p><b>Rachas:</b> 3 bajas = UAV (<b>4</b>) · 5 = misil (<b>5</b>) · 7 = coche RC bomba (<b>6</b>) · 9 = ataque aéreo (<b>7</b>). <b>G</b> usa la primera. Granadas: <b>V</b> frag, <b>H</b> humo, <b>J</b> flash. Si mueres pierdes la racha.</p>
-<p>Sniper: 1 tiro y muerto. Pistola y ametralladora: barra de vida, pero un tiro a la cabeza mata. Pulsa F para pantalla completa.</p>`,
-      [['Jugar contra bots', () => this.start('bomb')]]);
+    this.overlay(`<div class="chm"><div class="chl">${logoHTML()}</div><p style="font-weight:600;letter-spacing:.3em;font-size:14px;opacity:.9">CHILL · AIM · ENJOY</p>
+<p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
+<p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>B</b> tienda · <b>E</b> recoger/plantar · <b>R</b> recargar · <b>Shift</b> agacharte · <b>espacio</b> saltar</p>
+<p><b>Rachas:</b> <b>G</b> usa la primera (3 bajas UAV · 5 misil · 7 coche RC · 9 ataque aéreo). Granadas: <b>V</b> frag, <b>H</b> humo, <b>J</b> flash.</p></div>`,
+      [['Jugar contra bots', () => this.start('bomb')], ['Ajustes', () => this.openSettings(), true]]);
+    if (this.menuStop) this.menuStop(); this.menuStop = menuBackdrop(this.ov);
   }
   pause() {
     if (this.state !== 'play') return;
     this.state = 'pause'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.eDown = false; this.ctrl.exitPointerLock();
-    this.overlay('<h2>Pausa</h2><p>Haz clic para seguir (capturará el ratón).</p>', [['Continuar', () => this.resume()], ['Salir al menú', () => this.showMenu(), true]]);
+    this.overlay('<h2>Pausa</h2><p>Haz clic para seguir (capturará el ratón).</p>', [['Continuar', () => this.resume()], ['Ajustes', () => this.openSettings(), true], ['Salir al menú', () => this.showMenu(), true]]);
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode, cont = false) {
-    if (!cont || !this.eco || this.match.over) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
+    const newMatch = !cont || !this.eco || this.match.over;
+    if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
     this.grenades.clearRound();
     if (cont && this.match.round < 5) this.match.round++;
-    this.mode = mode; this.killfx.reset(); this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
+    this.mode = mode; this.killfx.reset(); if (cont && !newMatch) this.streaks.cancel('round'); else this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
     this.score = 0; this.kills = 0; this.heads = 0; this.roundT = mode === 'bomb' ? 150 : 60; this.spawnTimer = 0.5; this.over = false; this.kf.textContent = '';
