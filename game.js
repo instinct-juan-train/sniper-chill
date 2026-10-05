@@ -9,6 +9,11 @@ import { createBots } from './bots.js';
 import { createKillCam } from './killcam.js';
 import { applyLook } from './graphics.js';
 import { createAnimations } from './animations.js';
+import { createKillFX } from './killfx.js';
+import { getContext } from './audio.js';
+import { DIFFICULTY } from './botsai.js';
+import { createStreaks } from './streaks.js';
+import { createEconomy, WEAPON_STATS } from './economy.js';
 
 const CSS = `
 .sg{font-family:system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
@@ -39,9 +44,9 @@ export class Game {
     try { this.look = /[?&]look=off/.test(location.search) ? null : applyLook(THREE, this.renderer, this.scene, this.map); } catch (err) { console.error('look', err); this.look = null; }
 
     // physics world: map blocking boxes + roof slabs + ramps (from the map's floor/ramp data)
-    const m = this.map; const phys = [...m.colliders];
-    for (const f of m.floors) if (f.y > 0) phys.push({ min: { x: f.minX, y: f.y - 3, z: f.minZ }, max: { x: f.maxX, y: f.y, z: f.maxZ } });
-    for (const r of m.ramps) phys.push({ type: 'ramp', axis: r.axis, direction: r.y1 > r.y0 ? 1 : -1, min: { x: r.minX, y: Math.min(r.y0, r.y1), z: r.minZ }, max: { x: r.maxX, y: Math.max(r.y0, r.y1), z: r.maxZ } });
+    const m = this.map; const phys = m.physicsColliders ? [...m.physicsColliders] : [...m.colliders];
+    for (const f of m.physicsColliders ? [] : m.floors) if (f.y > 0) phys.push({ min: { x: f.minX, y: f.y - 3, z: f.minZ }, max: { x: f.maxX, y: f.y, z: f.maxZ } });
+    for (const r of m.physicsColliders ? [] : m.ramps) phys.push({ type: 'ramp', axis: r.axis, direction: r.y1 > r.y0 ? 1 : -1, min: { x: r.minX, y: Math.min(r.y0, r.y1), z: r.minZ }, max: { x: r.maxX, y: Math.max(r.y0, r.y1), z: r.maxZ } });
     this.phys = phys;
     this.world = [...phys, { min: { x: -40, y: -2, z: -40 }, max: { x: 40, y: 0, z: 40 } }]; // ground also stops bullets
 
@@ -56,12 +61,22 @@ export class Game {
     this.player = createPlayerState();
     this.bots = createBots(THREE, this.scene, m, { raycast, colliders: this.world });
     this.anim = createAnimations(THREE, { scene: this.scene, camera: this.camera, vm: this.vm, root: root, renderer: this.renderer, bots: this.bots }); this.anim.settings.slowmo = false; this.anim.settings.tracers = false;
+    this.killfx = createKillFX(THREE, { scene: this.scene, camera: this.camera, container: root, audioContext: getContext,
+      groundAt: (x, z, y) => { const h = this.map.getHeight(x, z); return isFinite(h) ? h : y; },
+      raycastWorld: (o, d, max) => { const h = raycast(o, d, { colliders: this.world, maxDistance: max }); return h && h.kind === 'world' ? { point: h.point, normal: h.normal } : null; } });
+    this.killfx.config.slowmo = false; // killcam owns time; only last-enemy kills get the cinematic
+    this.streaks = createStreaks({ THREE, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
+      isPlaying: () => this.state === 'play',
+      onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Racha: baja +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
+    this.streaks.show(false);
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
-    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;right:10px;bottom:8px;z-index:200;font:700 12px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
+    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;right:6px;bottom:2px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
     this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
-    this.fx = []; this.state = 'menu'; this.mode = 'bomb'; this.locked = false; this.wasLocked = false;
+    this.fx = []; this.cineOK = false;
+    { const q = /[?&]diff=(easy|medium|hard)/.exec(location.search); this.diff = q ? q[1] : 'chill';
+      if (this.diff === 'chill') { Object.assign(DIFFICULTY.easy, { reaction: 0.95, aimSigma: 0.10, burst: 6, burstPause: 0.9, patience: 5 }); Object.assign(DIFFICULTY.medium, { reaction: 0.6, aimSigma: 0.06, burst: 4, burstPause: 0.7 }); } } this.state = 'menu'; this.mode = 'bomb'; this.locked = false; this.wasLocked = false;
     this.ctrl.setEnabled(false);
     this.bomb = { planted: false, pos: new THREE.Vector3(), t: 0, site: '', defuseT: 0, beepT: 0 };
     this.bombMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.35), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0xff0000, emissiveIntensity: 0.7 }));
@@ -83,6 +98,7 @@ export class Game {
     c.addEventListener('contextmenu', (e) => e.preventDefault());
     c.addEventListener('mousedown', (e) => {
       if (this.state !== 'play') return;
+      if (this.streaks.controlling || (this.eco && this.eco.getState().menuOpen)) { return; }
       if (!this.ctrl.state.pointerLocked) this.ctrl.requestPointerLock();
       if (e.button === 0) this.ws.setTrigger(true);
       if (e.button === 2) { this.aimDownAt = performance.now(); if (this.ws.aiming) { this.ws.setAim(false); this.aimSkipUp = true; } else this.ws.setAim(true); }
@@ -93,15 +109,16 @@ export class Game {
       if (e.button === 2) { if (this.aimSkipUp) this.aimSkipUp = false; else if (performance.now() - this.aimDownAt > 350) this.ws.setAim(false); } // tap = toggle, hold = classic
     });
     d.addEventListener('keydown', (e) => { if (this.state === 'play' && e.code === 'KeyQ' && !e.repeat) this.ws.setAim(!this.ws.aiming); });
-    d.addEventListener('wheel', (e) => { if (this.state === 'play') this.ws.cycle(e.deltaY > 0 ? 1 : -1); }, { passive: true });
+    d.addEventListener('wheel', (e) => { if (this.state === 'play') { const inv = this.eco.getState().inventory; this.pick(this.ws.current === inv.primary ? 'secondary' : 'primary'); } }, { passive: true });
     d.addEventListener('pointerlockchange', () => {
       const on = d.pointerLockElement === c;
-      if (on) { this.wasLocked = true; } else if (this.wasLocked) { this.wasLocked = false; if (this.state === 'play') this.pause(); }
+      if (on) { this.wasLocked = true; } else if (this.wasLocked) { this.wasLocked = false; if (this.state === 'play' && !(this.eco && this.eco.getState().menuOpen) && !this.streaks.controlling) this.pause(); }
     });
     d.addEventListener('keydown', (e) => {
       if (this.state !== 'play') return;
       if (e.code === 'Escape') { this.pause(); return; }
-      if (e.code === 'Digit1') this.ws.select(0); else if (e.code === 'Digit2') this.ws.select(1); else if (e.code === 'Digit3') this.ws.select(2);
+      if (this.eco && this.eco.getState().menuOpen) return;
+      if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary');
       else if (e.code === 'KeyR') this.ws.reload(); else if (e.code === 'KeyE') this.eDown = true;
     });
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
@@ -110,6 +127,25 @@ export class Game {
     const map = { pistol: 'shot_pistol', machinegun: 'shot_mg', sniper: 'shot_sniper' };
     if (n === 'shot') play(map[d.weapon]); else if (n === 'empty') { play('empty'); this.anim.onEmpty(); } else if (n === 'reload') { play('reload'); this.anim.onReload(); } else if (n === 'switch') { play('ui_click'); this.anim.onSwitch(); }
   }
+  newEconomy() {
+    if (this.eco) { try { this.eco.dispose(); } catch (e) {} }
+    this.owned = new Set(['pistol']);
+    this.eco = createEconomy({ container: this.root, team: 'T', freezeTime: 12, onEvent: (n, d) => this.onEco(n, d) });
+  }
+  syncAmmoToEco() { if (!this.eco) return; for (const id of ['pistol', 'machinegun', 'sniper']) { const a = this.ws.ammo[id]; if (a && this.eco.getState().inventory.ammo[id]) this.eco.setAmmo(id, { mag: a.mag, reserve: a.reserve }); } }
+  onEco(n, d) {
+    if (n === 'menu') {
+      if (d.open) { this.syncAmmoToEco(); this.ws.setTrigger(false); this.eDown = false; this.ctrl.exitPointerLock(); }
+      else if (this.state === 'play') { try { this.ctrl.requestPointerLock(); } catch (e) {} }
+    } else if (n === 'inventory' || n === 'equip' || n === 'purchase') {
+      const s = d.state, inv = s.inventory;
+      for (const id of [inv.primary, inv.secondary]) { if (id && !this.owned.has(id)) { this.owned.add(id); const a = inv.ammo[id]; if (a) { this.ws.ammo[id].mag = a.mag; this.ws.ammo[id].reserve = a.reserve; } } }
+      for (const id of Array.from(this.owned)) if (id !== inv.primary && id !== inv.secondary) this.owned.delete(id);
+      if (!this.owned.has(this.ws.current)) { this.ws.select(inv.secondary || 'pistol'); }
+      if (n === 'equip' && d.weapon) this.ws.select(d.weapon);
+    } else if (n === 'reward' || n === 'money') { /* eco chip shows money */ }
+  }
+  pick(slot) { const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
   overlay(html, btns) {
     this.ov.style.display = 'flex'; this.ov.innerHTML = html;
     const row = document.createElement('div'); row.className = 'row';
@@ -117,10 +153,11 @@ export class Game {
     this.ov.appendChild(row);
   }
   showMenu() {
-    this.state = 'menu'; this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
+    this.state = 'menu'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
     this.overlay(`<h2>Sniper Chill</h2><p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
 <p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> agacharte</p>
+<p><b>Rachas:</b> 3 bajas = UAV (<b>4</b>) · 5 = misil (<b>5</b>) · 7 = coche RC bomba (<b>6</b>) · 9 = ataque aéreo (<b>7</b>). <b>G</b> usa la primera. Si mueres pierdes la racha.</p>
 <p>Sniper: 1 tiro y muerto. Pistola y ametralladora: barra de vida, pero un tiro a la cabeza mata. Pulsa F para pantalla completa.</p>`,
       [['Bomba contra bots', () => this.start('bomb')], ['Reto diario (60 s, ranking)', () => this.start('daily'), true]]);
   }
@@ -130,28 +167,29 @@ export class Game {
     this.overlay('<h2>Pausa</h2><p>Haz clic para seguir (capturará el ratón).</p>', [['Continuar', () => this.resume()], ['Salir al menú', () => this.showMenu(), true]]);
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
-  start(mode) {
-    this.mode = mode; this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0);
+  start(mode, cont = false) {
+    if (!cont || !this.eco) this.newEconomy();
+    this.mode = mode; this.killfx.reset(); this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 12 }); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
     this.score = 0; this.kills = 0; this.heads = 0; this.roundT = mode === 'bomb' ? 150 : 60; this.spawnTimer = 0.5; this.over = false; this.kf.textContent = '';
     this.rng = mulberry(Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')));
     if (mode === 'bomb') {
       const ct = this.map.spawnPoints.filter((s) => s.team === 'CT');
-      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: i < 2 ? 'hard' : 'medium' }));
+      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff === 'chill' ? (i < 2 ? 'medium' : 'easy') : this.diff }));
     }
     this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play';
-    this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
+    this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
   end(win, msg) {
-    if (this.over) return; if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
       top.push(this.score); top.sort((a, b) => b - a); top = top.slice(0, 5); try { localStorage.setItem(key, JSON.stringify(top)); } catch (e) {}
       extra = `<p>Puntos: <b>${this.score}</b> · Bajas: ${this.kills} · Headshots: ${this.heads}</p><p>Tu top de hoy (solo en este dispositivo): ${top.join(' · ')}</p>`;
     }
-    this.overlay(`<h2>${win ? 'Ganas' : 'Pierdes'}</h2><p>${msg}</p>${extra}`, [['Otra vez', () => this.start(this.mode)], ['Menú', () => this.showMenu(), true]]);
+    this.overlay(`<h2>${win ? 'Ganas' : 'Pierdes'}</h2><p>${msg}</p>${extra}`, [['Siguiente ronda (conservas dinero)', () => this.start(this.mode, true)], ['Partida nueva', () => this.start(this.mode)], ['Menú', () => this.showMenu(), true]]);
   }
   tracer(a, b, color = 0xfff2a0, life = 0.07) {
     const g = new THREE.BufferGeometry().setFromPoints([a, b]); const m = new THREE.LineBasicMaterial({ color, transparent: true });
@@ -170,27 +208,41 @@ export class Game {
       let kh = hit ? (hit.kind === 'target' ? null : { kind: 'world', normal: hit.normal }) : null;
       if (hit && hit.kind === 'target') {
         const b = hit.target, zone = hit.zone === 'legs' ? 'limb' : hit.zone;
-        const r = applyDamage(b.health, s.weapon, zone);
+        const hp0 = b.health, r = applyDamage(b.health, s.weapon, zone);
         kh = { kind: 'target', bot: b, zone, headshot: r.headshot, killed: r.killed };
         this.bots.damage(b, r.hp, r.headshot); this.anim.onBotHit(b, { dir, point: hit.point, headshot: r.headshot, killed: r.killed, damage: r.damage });
-        this.hud.hitMarker(r.killed, r.headshot);
+        this.cineOK = r.killed && this.bots.aliveCount() <= 1;
+        this.killfx.hit({ bot: b, point: hit.point, zone, weapon: s.weapon, damage: hp0 - r.hp, killed: r.killed, headshot: r.headshot, origin: o, dir, distance: hit.distance, scoped: this.ws.aiming, last: this.cineOK });
         play(r.killed ? 'kill' : r.headshot ? 'headshot' : 'hit');
         if (r.killed) {
-          this.kills++; this.score += 100 + (r.headshot ? 50 : 0); if (r.headshot) this.heads++;
+          this.streaks.registerKill({ headshot: r.headshot }); this.eco.recordKill({ id: b.id, headshot: r.headshot, weapon: s.weapon }); this.kf.textContent = ''; this.kills++; this.score += 100 + (r.headshot ? 50 : 0); if (r.headshot) this.heads++;
           this.kf.textContent = r.headshot ? 'HEADSHOT +150' : 'Baja +100'; this.kfT = 1.5;
         }
       }
-      this.kc.shoot({ muzzle, end, weapon: s.weapon, hit: kh });
+      this.kc.config.gate = () => this.cineOK; this.kc.shoot({ muzzle, end, weapon: s.weapon, hit: kh });
     }
   }
   update(dt) {
     const c = this.ctrl, st = c.state;
+    const es = this.eco.getState(); this.eco.update(dt);
+    if (es.phase === 'freeze' || es.menuOpen) {
+      this.ws.setTrigger(false); this.eDown = false;
+      const k0 = this.ws.consumeLook(); if (k0.pitch || k0.yaw) c.look(-k0.yaw / 0.0022, -k0.pitch / 0.0022);
+      c.applyToCamera(this.camera); setListener(st.eye, c.getDirection());
+      this.hud.setHealth(this.player.hp);
+      this.info.textContent = es.phase === 'freeze' ? `FASE DE COMPRA · ${Math.ceil(this.eco.getState().freezeRemaining)} s · B = tienda` : '';
+      this.anim.update(dt, { moving: false, sprinting: false, grounded: true, playerEye: st.eye, feetY: st.position.y, bots: this.bots.list });
+      return;
+    }
     c.update(dt);
     const k = this.ws.consumeLook(); if (k.pitch || k.yaw) c.look(-k.yaw / 0.0022, -k.pitch / 0.0022);
     c.applyToCamera(this.camera);
     this.camera.fov = this.ws.fov(75); this.camera.updateProjectionMatrix();
+    this.streaks.update(dt);
+    if (this.player.hp < 100) this.killfx.setPlayerWound(st.position, this.player.hp, 100);
+    if (this.streaks.controlling) { this.eDown = false; this.ws.setTrigger(false); }
     const moving = Math.hypot(st.velocity.x, st.velocity.z) > 0.5;
-    const shots = this.ws.update(dt, { moving, sprinting: st.speed > 5.5, grounded: st.grounded });
+    const shots = this.streaks.controlling ? [] : this.ws.update(dt, { moving, sprinting: st.speed > 5.5, grounded: st.grounded });
     if (shots.length) this.fireShots(shots);
     const fwd = c.getDirection(); setListener(st.eye, fwd);
     if (moving && st.grounded) { this.stepT -= dt; if (this.stepT <= 0) { play('footstep'); this.stepT = st.speed > 5.5 ? 0.3 : 0.45; } }
@@ -214,7 +266,7 @@ export class Game {
     for (const e of events) {
       if (e.type === 'shot') {
         play('bot_shot', e.from); this.anim.onBotShot(e.hit ? e : { ...e, to: e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)) });
-        if (e.hit && this.player.alive) { this.player.damage(e.damage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.hud.setHealth(0); this.end(false, 'Te han eliminado.'); } }
+        if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.end(false, 'Te han eliminado.'); } }
       } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'Desactivaron la bomba.'); }
     }
     this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: this.bots.list });
@@ -252,12 +304,12 @@ export class Game {
     if (!this.running) return; requestAnimationFrame(this.loop);
     { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')'; p.n = 0; p.t = 0; p.worst = 0; } }
     const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
-    const dt = real * this.kc.update(real);
+    const dt = real * this.kc.update(real) * this.killfx.update(real);
     if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
     if (this.state === 'play') this.update(dt);
     else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); this.anim.update(dt, { bots: this.bots.list }); }
-    this.kc.applyCamera();
+    this.kc.applyCamera(); this.killfx.applyCamera(this.camera);
     if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
     this.kc.afterRender();
   }

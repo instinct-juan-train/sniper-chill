@@ -1,278 +1,186 @@
-/**
- * map.js - "Sniper Chill" map module (low-poly rooftop island). Self-contained ES module, no deps.
- *
- * import { buildMap } from './map.js';
- * const map = buildMap(THREE);   // THREE passed in, no import needed here
- * scene.add(map.group);
- *
- * RETURNS
- *  group        THREE.Group  - all visuals (island, water, buildings, crates, bombsite markers).
- *                              Every solid mesh has userData.solid = true; use group.children traversal for bullet raycasts.
- *  lights       THREE.Group  - optional sun + hemisphere light (already inside `group`; also exposed to tweak/remove).
- *  colliders    THREE.Box3[] - BLOCKING boxes in world space (walls, crates, pillars, railings), each with min/max Vector3
- *                              (y-ranges are real, so cover on a rooftop sits at its roof height). Test the player
- *                              capsule/AABB (horizontal circle radius ~0.4, height ~1.7) against those whose y-range
- *                              overlaps [feetY+0.5, feetY+1.7].  A box is also tagged box.name for debugging.
- *  getHeight(x,z) -> number  - walkable floor height at x,z (0 ground, 2.5 rooftops, ramps interpolated, -Infinity
- *                              outside the island). Set feetY = getHeight(x,z) when grounded; refuse a horizontal move if
- *                              getHeight(new) - feetY > map.stepHeight (0.7) (this is what makes rooftop edges un-walkable-up
- *                              and lets ramps work). Falling off a rooftop edge is allowed (gravity down to getHeight).
- *  stepHeight   number 0.7
- *  spawnPoints  [{ position:Vector3, yaw:number, team:'T'|'CT' }]  - 5 per team. Player = T[0] by convention; bots use the rest.
- *  bombsites    { A:{center:Vector3, radius:number, box:Box3}, B:{...} } - plant zone = within radius horizontally of center
- *               (and |y - center.y| < 2). A is on the ground (NW); B is on the SE rooftop (y=2.5).
- *  navGrid      { cellSize, cols, rows, originX, originZ, walkable:Uint8Array(cols*rows), height:Float32Array,
- *                 worldToCell(x,z)->[c,r], cellToWorld(c,r)->Vector3 (centre, at floor height),
- *                 isWalkable(c,r)->bool, findPath(fromVec3,toVec3)->Vector3[] (A*, 8-way, no corner cutting, [] if none),
- *                 randomWalkable()->Vector3 }
- *  bounds       { minX,maxX,minZ,maxZ } island rectangle (also enforced by perimeter walls).
- *  sky          { background:number, fog:{color,near,far} } suggested scene.background / scene.fog values.
- *  dispose()    frees geometries/materials.
- *
- * Coordinates: Y up, 1 unit = 1 metre, island is 64x64 centred on origin. T side is south (+z), CT side is north (-z).
+/** KITE GARDEN - an original pastel competitive garden-town. Drop-in Three.js r160 map.
+ * Coordinates: 64x64m, T south, CT north. All heights are single-layer.
+ * Contested market mid, window balcony, orchard alleys and two multi-entry sites.
+ * No imports/assets/network requests. All materials/geometries/textures disposed.
  */
 export function buildMap(THREE) {
-  const group = new THREE.Group();
-  group.name = 'SniperChillMap';
-  const colliders = [];
-  const floors = [];   // {minX,maxX,minZ,maxZ,y}
-  const ramps = [];    // {minX,maxX,minZ,maxZ,axis:'x'|'z',from,to,y0,y1}
-  const HALF = 32, ROOF = 2.5, STEP = 0.7;
-  const geos = [], mats = [];
-  const matCache = {};
-  const mat = (c, opts = {}) => {
-    const k = c + JSON.stringify(opts);
-    if (!matCache[k]) { matCache[k] = new THREE.MeshLambertMaterial(Object.assign({ color: c, flatShading: true }, opts)); mats.push(matCache[k]); }
-    return matCache[k];
-  };
-  const palette = { sand: 0xf2d9a0, grass: 0x8fd694, wall: 0xf6efe6, wallB: 0xffb3c1, wallC: 0xa8d8ea, roof: 0xe8a87c, crate: 0xc98f5a,
-    crate2: 0x7fb2d9, dark: 0x6b6f80, water: 0x4fc3e8, ramp: 0xd9c7a3, siteA: 0xff6b6b, siteB: 0x6bcB77, palm: 0x4caf6a, trunk: 0x9c6b3f };
-
-  function addMesh(geo, material, x, y, z, solid) {
-    geos.push(geo);
-    const m = new THREE.Mesh(geo, material);
-    m.position.set(x, y, z);
-    m.castShadow = true; m.receiveShadow = true;
-    m.userData.solid = !!solid;
-    group.add(m);
-    return m;
+  const group = new THREE.Group(); group.name = 'Kite Garden';
+  const colliders=[], floors=[], ramps=[], geos=new Set(), mats=new Set(), textures=[];
+  const STEP=.7, HALF=32;
+  const C={ground:0x91c990, tile:0xe2d2b4, edge:0xb2c4a0, metal:0x6d8494, roof:0xc48576, cream:0xffedce,
+    coral:0xff846e, cyan:0x68e3db, purple:0xc8b3cb, green:0x73b787, gold:0xffda8d};
+  const cache=new Map();
+  function material(color, basic=false) {
+    const key=color+':'+basic;
+    if(!cache.has(key)){const m=basic?new THREE.MeshBasicMaterial({color}):new THREE.MeshLambertMaterial({color,flatShading:true});cache.set(key,m);mats.add(m);} return cache.get(key);
   }
-  /** blocking box centred (x,z) size w x d, from y0 to y0+h */
-  function box(x, z, w, d, h, y0, color, name, solid = true) {
-    addMesh(new THREE.BoxGeometry(w, h, d), mat(color), x, y0 + h / 2, z, true);
-    if (solid) {
-      const b = new THREE.Box3(new THREE.Vector3(x - w / 2, y0, z - d / 2), new THREE.Vector3(x + w / 2, y0 + h, z + d / 2));
-      b.name = name || 'box';
-      colliders.push(b);
+  function mesh(g,m,x,y,z,solid=false,name='detail') {
+    geos.add(g); const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.userData.solid=solid;
+    o.name=name;o.castShadow=solid;o.receiveShadow=true;group.add(o);return o;
+  }
+  function box(x,z,w,d,h,y,color,name='cover',blocking=true) {
+    const o=mesh(new THREE.BoxGeometry(w,h,d),material(color),x,y+h/2,z,true,name);
+    if(blocking){const b=new THREE.Box3(new THREE.Vector3(x-w/2,y,z-d/2),new THREE.Vector3(x+w/2,y+h,z+d/2));b.name=name;colliders.push(b);}return o;
+  }
+  function detail(x,y,z,w,h,d,color){return mesh(new THREE.BoxGeometry(w,h,d),material(color,true),x,y,z,false);}
+  function platform(x,z,w,d,y,color=C.tile) {
+    box(x,z,w,d,y===0?.55:.18,y===0?-.55:y-.18,color,'walkable deck',false);
+    floors.push({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,y});
+    if(y>0)detail(x,y+.015,z,w,.025,d,C.tile);
+  }
+  function ramp(x,z,w,d,axis,y0,y1) {
+    const r={minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,axis,y0,y1};ramps.push(r);
+    const a=axis==='x'; const verts=[[-w/2,y0,-d/2],[w/2,a?y1:y0,-d/2],[w/2,y1,d/2],[-w/2,a?y0:y1,d/2]];
+    const p=[]; const bottom=verts.map(v=>[v[0],v[1]-.18,v[2]]); const all=[...verts,...bottom];
+    for(const face of [[0,3,2],[0,2,1],[0,1,5],[0,5,4],[1,2,6],[1,6,5],[2,3,7],[2,7,6],[3,0,4],[3,4,7],[4,5,6],[4,6,7]])for(const i of face)p.push(...all[i]);
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.computeVertexNormals();mesh(g,material(C.purple),x,0,z,true,'access ramp');
+    // Thin contrasting guides follow the same mathematical slope as the floor.
+    for(const s of [-1,1]){const length=a?w:d, rise=y1-y0;
+      const strip=mesh(new THREE.BoxGeometry(a?Math.hypot(length,rise):.075,.025,a?.075:Math.hypot(length,rise)),material(C.cyan,true),a?x:x+s*(w/2-.18),(y0+y1)/2+.04,a?z+s*(d/2-.18):z);
+      if(a)strip.rotation.z=Math.atan2(rise,length);else strip.rotation.x=-Math.atan2(rise,length);
     }
   }
-  /** walkable slab (visual + floor height), top at y */
-  function platform(x, z, w, d, y, color, thick = 3) {
-    addMesh(new THREE.BoxGeometry(w, thick, d), mat(color), x, y - thick / 2, z, true);
-    floors.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, y });
+  function label(text,x,y,z,color,width=4,rotation=0) {
+    const c=document.createElement('canvas');c.width=512;c.height=160;const ctx=c.getContext('2d');
+    ctx.fillStyle='#182839';ctx.fillRect(0,0,512,160);ctx.fillStyle='#'+color.toString(16).padStart(6,'0');ctx.fillRect(0,0,12,160);
+    ctx.font='bold 72px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,262,82);
+    const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;textures.push(tex);
+    const m=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide});mats.add(m);
+    const o=mesh(new THREE.PlaneGeometry(width,width*160/512),m,x,y,z,false,'wayfinding');o.rotation.y=rotation;
   }
-  /** ramp rising along axis from `from` coordinate (y0) to `to` coordinate (y1) */
-  function ramp(cx, cz, w, d, axis, y0, y1) {
-    const r = { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, axis, y0, y1 };
-    ramps.push(r);
-    const len = axis === 'x' ? w : d, rise = y1 - y0, hyp = Math.hypot(len, rise), ang = Math.atan2(rise, len);
-    const g = new THREE.BoxGeometry(axis === 'x' ? hyp : w, 0.4, axis === 'x' ? d : hyp);
-    const m = addMesh(g, mat(palette.ramp), cx, (y0 + y1) / 2 - 0.2, cz, true);
-    if (axis === 'x') m.rotation.z = ang; else m.rotation.x = -ang;
-    // side skirts so ramps do not look hollow
-    const sk = new THREE.BoxGeometry(axis === 'x' ? len : 0.3, Math.max(y0, y1), axis === 'x' ? 0.3 : len);
-    void sk; // (kept simple: low-poly ramps are slabs)
+  function cover(x,z,w=3,d=1.7,h=1.2,y=0,color=C.cream) {
+    box(x,z,w,d,h,y,color,'planter / cover');detail(x,y+h-.12,z,w+.04,.12,d+.04,C.metal);
+    // Small sculptural plants keep silhouettes clear above chest-height cover.
+    for(let i=0;i<3;i++)mesh(new THREE.BufferGeometry().copy(new THREE.ConeGeometry(.38,.55,5)),material(C.green),x+(i-1)*w*.22,y+h+.2,z,false,'plant');
   }
-  function wallBox(x, z, w, d, h, color, name) { box(x, z, w, d, h, 0, color, name || 'wall'); }
-
-  // ---------- base island ----------
-  const waterMat = new THREE.MeshBasicMaterial({ color: 0x4fc9ee }); mats.push(waterMat);
-  const water = addMesh(new THREE.BoxGeometry(400, 1, 400), waterMat, 0, -2, 0, false);
-  water.castShadow = false; water.name = 'water';
-  addMesh(new THREE.BoxGeometry(HALF * 2 + 4, 2, HALF * 2 + 4), mat(palette.sand), 0, -1.06, 0, false).name = 'beach';
-  const grassTex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
-    x.fillStyle = '#7fd08a'; x.fillRect(0, 0, 128, 128);
-    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 90; i++) { x.fillStyle = rnd() < 0.5 ? '#86d691' : '#76c982'; const w = 6 + rnd() * 14; x.fillRect(rnd() * 128, rnd() * 128, w, w * 0.6); }
-    for (let i = 0; i < 40; i++) { x.fillStyle = '#6dbf79'; const px = rnd() * 128, py = rnd() * 128; x.fillRect(px, py, 2, 5); x.fillRect(px + 3, py + 1, 2, 4); }
-    x.strokeStyle = 'rgba(40,110,70,0)'; x.lineWidth = 2; x.strokeRect(0, 0, 128, 128);
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 8); t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 16; t.generateMipmaps = true; t.colorSpace = THREE.SRGBColorSpace; return t;
-  })();
-  const groundMat = new THREE.MeshLambertMaterial({ map: grassTex }); mats.push(groundMat);
-  addMesh(new THREE.BoxGeometry(HALF * 2, 0.4, HALF * 2), groundMat, 0, -0.2, 0, true).name = 'ground';
-  floors.push({ minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF, y: 0 });
-
-  // perimeter low walls (also colliders) with gaps nowhere: closed arena
-  const P = HALF + 0.5;
-  box(0, -P, HALF * 2 + 2, 1, 3, 0, 0xfff0d8, 'edge');
-  box(0, P, HALF * 2 + 2, 1, 3, 0, 0xfff0d8, 'edge');
-  box(-P, 0, 1, HALF * 2 + 2, 3, 0, 0xfff0d8, 'edge');
-  box(P, 0, 1, HALF * 2 + 2, 3, 0, 0xfff0d8, 'edge');
-
-  // ---------- centre rooftop "tower deck" (sniper perch) ----------
-  platform(0, 0, 12, 12, ROOF, palette.roof);
-  ramp(-10, 0, 8, 4, 'x', 0, ROOF);  // west ramp (rising toward +x)
-  ramp(10, 0, 8, 4, 'x', ROOF, 0);   // east ramp (descending toward +x)
-  // low cover rim on the deck (gaps at ramp sides)
-  box(0, -5.7, 12, 0.6, 1.1, ROOF, palette.wallB, 'deckrim');
-  box(0, 5.7, 12, 0.6, 1.1, ROOF, palette.wallB, 'deckrim');
-  box(-1.5, 0, 1.2, 3, 1.1, ROOF, palette.crate, 'deckcrate');
-  box(2.5, -2.5, 1.6, 1.6, 1.4, ROOF, palette.crate2, 'deckcrate');
-
-  // ---------- Site A (NW, ground) ----------
-  const A = new THREE.Vector3(-19, 0, -19);
-  addMesh(new THREE.CylinderGeometry(5, 5, 0.06, 6), mat(palette.siteA), A.x, 0.05, A.z, false).name = 'siteA_marker';
-  box(-24.5, -19, 1, 8, 2.6, 0, palette.wall, 'A_back');
-  box(-19, -24.5, 8, 1, 2.6, 0, palette.wall, 'A_back');
-  box(-21, -16, 2, 2, 1.4, 0, palette.crate, 'A_crate');
-  box(-16.5, -20.5, 1.6, 2.6, 1.4, 0, palette.crate2, 'A_crate');
-  box(-19.2, -19.2, 1.2, 1.2, 0.9, 0, palette.crate, 'A_boxsmall');
-  box(-13, -13, 1.2, 1.2, 2.6, 0, palette.dark, 'A_pillar');
-
-  // ---------- Site B (SE, rooftop) ----------
-  platform(20, 20, 14, 14, ROOF, palette.roof);
-  ramp(20, 10.5, 4, 5, 'z', 0, ROOF);          // ramp from north (z smaller) up toward south
-  ramp(11.5, 24, 5, 4, 'x', 0, ROOF);          // ramp from west up toward east
-  const B = new THREE.Vector3(20, ROOF, 21);
-  addMesh(new THREE.CylinderGeometry(4.5, 4.5, 0.06, 6), mat(palette.siteB), B.x, ROOF + 0.05, B.z, false).name = 'siteB_marker';
-  // railings: south & east edge (solid), north/west partially
-  box(20, 26.7, 14, 0.5, 1.2, ROOF, palette.wallB, 'B_rail');
-  box(26.7, 20, 0.5, 14, 1.2, ROOF, palette.wallB, 'B_rail');
-  box(13.3, 17, 0.5, 6, 1.2, ROOF, palette.wallB, 'B_rail');
-  box(24, 14.2, 6, 0.5, 1.2, ROOF, palette.wallB, 'B_rail');
-  box(17, 18.5, 1.8, 1.8, 1.3, ROOF, palette.crate, 'B_crate');
-  box(23, 22, 2.4, 1.2, 1.3, ROOF, palette.crate2, 'B_crate');
-  box(20.2, 21.2, 1.0, 1.0, 0.8, ROOF, palette.crate, 'B_boxsmall');
-
-  // ---------- Mid buildings / lane walls (ground) ----------
-  // west "shop": three walls with door gap south
-  wallBox(-18, 3, 9, 0.8, 3, palette.wall, 'shopN');
-  wallBox(-22.2, 6.5, 0.8, 7, 3, palette.wall, 'shopW');
-  wallBox(-13.8, 6.5, 0.8, 7, 3, palette.wall, 'shopE');
-  wallBox(-20.5, 10, 3.5, 0.8, 3, palette.wall, 'shopS1');
-  wallBox(-15.5, 10, 3.5, 0.8, 3, palette.wall, 'shopS2');
-  box(-18, 6.5, 1.8, 1.8, 1.2, 0, palette.crate, 'shop_crate');
-  // east "garage"
-  wallBox(18, -4, 9, 0.8, 3, palette.wallB, 'garN');
-  wallBox(22.2, -8, 0.8, 8, 3, palette.wallB, 'garE');
-  wallBox(14.4, -9, 0.8, 6, 3, palette.wallB, 'garW');
-  box(18, -8, 2.2, 1.4, 1.2, 0, palette.crate2, 'gar_crate');
-  // long mid walls to make lanes
-  wallBox(-7, -14, 0.8, 8, 2.4, palette.wallC, 'laneW');
-  wallBox(7, 14, 0.8, 8, 2.4, palette.wallC, 'laneE');
-  // scattered cover
-  const crates = [[-4, 12, 2, 2, 1.3], [5, -12, 2, 2, 1.3], [-27, -4, 2.4, 2, 1.3], [27, 6, 2.4, 2, 1.3],
-    [-9, 22, 1.8, 1.8, 1.2], [10, -22, 1.8, 1.8, 1.2], [-1, -19, 3, 1, 1.0], [1, 19, 3, 1, 1.0], [-27, 22, 2, 2, 1.3], [28, -22, 2, 2, 1.3]];
-  crates.forEach(([x, z, w, d, h], i) => box(x, z, w, d, h, 0, i % 2 ? palette.crate2 : palette.crate, 'cover'));
-
-  // palms (decor, trunk collides lightly via thin box)
-  const palms = [[-29, -29], [29, -29], [-29, 29], [-3, 29], [3, -29], [29, 12], [-29, 14]];
-  palms.forEach(([x, z]) => {
-    box(x, z, 0.5, 0.5, 3, 0, palette.trunk, 'palm');
-    addMesh(new THREE.ConeGeometry(2, 1.6, 5), mat(palette.palm), x, 3.5, z, false);
-    addMesh(new THREE.ConeGeometry(1.4, 1.3, 5), mat(palette.palm), x, 4.5, z, false);
-  });
-
-  // ---------- spawns ----------
-  const sp = (x, z, yaw, team) => ({ position: new THREE.Vector3(x, 0, z), yaw, team });
-  const spawnPoints = [
-    sp(0, 28, Math.PI, 'T'), sp(-6, 28, Math.PI, 'T'), sp(6, 28, Math.PI, 'T'), sp(-12, 26, Math.PI, 'T'), sp(12, 29, Math.PI, 'T'),
-    sp(0, -28, 0, 'CT'), sp(6, -28, 0, 'CT'), sp(-6, -28, 0, 'CT'), sp(12, -26, 0, 'CT'), sp(3, -25, 0, 'CT')
-  ];
-
-  // ---------- lights ----------
-  const lights = new THREE.Group();
-  const hemi = new THREE.HemisphereLight(0xcdeeff, 0xf2d9a0, 0.9);
-  const sun = new THREE.DirectionalLight(0xfff1d6, 0.9);
-  sun.position.set(25, 40, 15); sun.castShadow = true;
-  sun.shadow.camera.left = -45; sun.shadow.camera.right = 45; sun.shadow.camera.top = 45; sun.shadow.camera.bottom = -45;
-  sun.shadow.mapSize.set(1024, 1024);
-  lights.add(hemi, sun); group.add(lights);
-
-  // ---------- height query ----------
-  function getHeight(x, z) {
-    let h = -Infinity;
-    for (const f of floors) if (x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ && f.y > h) h = f.y;
-    for (const r of ramps) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) {
-      const t = r.axis === 'x' ? (x - r.minX) / (r.maxX - r.minX) : (z - r.minZ) / (r.maxZ - r.minZ);
-      const y = r.y0 + (r.y1 - r.y0) * t;
-      if (y > h) h = y;
-    }
-    return h;
+  // KITE GARDEN: original competitive garden-town, two distinct courtyards.
+  platform(0,0,64,64,0,C.ground);group.children[0].name='ground';
+  for(const [x,z,w,d]of[[0,-32.5,66,1],[0,32.5,66,1],[-32.5,0,1,64],[32.5,0,1,64]])box(x,z,w,d,3.5,0,C.cream,'perimeter');
+  const path=(x,z,w,d)=>detail(x,.03,z,w,.045,d,0xe8d8b5);
+  // Alleys frame three entry channels. Players always have cover and a flank.
+  path(0,24,48,8);path(0,-23,54,7);path(-24,0,7,48);path(24,0,7,48);
+  path(0,0,12,44);path(-11,-6,14,5);path(12,5,16,5);
+  path(-19,-12,20,19);path(21,-6,18,19);path(-12,11,10,5);path(12,-14,10,5);
+  function house(x,z,w,d,h,color,name){
+    box(x,z,w,d,h,0,color,name);box(x,z,w+.35,d+.35,.24,h,C.roof,name+' roof',false);
+    // Roof slabs are not walkable and use a matching box collider.
+    const r=new THREE.Box3(new THREE.Vector3(x-w/2-.175,h,z-d/2-.175),new THREE.Vector3(x+w/2+.175,h+.24,z+d/2+.175));r.name=name+' roof';colliders.push(r);
+    detail(x,h-.45,z+d/2+.015,w*.75,.12,.04,C.cream);
   }
-  // ground floor must not apply under rooftops for height: rooftop floor y wins via max. (Walking under a roof is not supported;
-  // roofs are solid slabs, platforms are 3m thick.) Solid slab interior is blocked in nav below.
-
-  // ---------- nav grid ----------
-  const cs = 1, cols = HALF * 2, rows = HALF * 2, originX = -HALF, originZ = -HALF;
-  const walkable = new Uint8Array(cols * rows), height = new Float32Array(cols * rows);
-  const AGENT = 0.45;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const x = originX + (c + 0.5) * cs, z = originZ + (r + 0.5) * cs, y = getHeight(x, z);
-    height[r * cols + c] = y;
-    let ok = y > -Infinity;
-    if (ok) for (const b of colliders) {
-      if (x > b.min.x - AGENT && x < b.max.x + AGENT && z > b.min.z - AGENT && z < b.max.z + AGENT && b.max.y > y + 0.5 && b.min.y < y + 1.7) { ok = false; break; }
-    }
-    walkable[r * cols + c] = ok ? 1 : 0;
+  // Offset building masses form original irregular lanes, not a copied map.
+  house(-12,21,11,7,5.2,C.coral,'south bakery');house(12,20,10,8,5.6,C.cyan,'south pottery');
+  house(-13,7,11,7,5.4,C.cream,'orchard house');house(-13,-17,10,7,5.4,C.coral,'north bell house');
+  house(14,12,10,7,5.1,C.cyan,'tea house');house(12,-5,7,10,5.8,C.cream,'market house');
+  house(-28,12,3,9,4.4,C.coral,'outer orchard wall');house(28,14,3,8,4.6,C.cyan,'outer garden wall');
+  house(-2,-26,8,4,4.8,C.cream,'defender lodge');
+  // Mid has an open long angle but covered sidesteps and two offset connectors.
+  cover(-2,9,2.2,1.8,1.15,0,C.coral);cover(2,-7,2.2,1.8,1.15,0,C.cyan);
+  box(-6,1,1,7,3,0,C.cream,'west mid angle');box(6,14,1,5,3,0,C.coral,'east mid angle');
+  // The window balcony faces mid from the northern side. Front cover is split
+  // around a 3m shooting window; side entry and rear ramp let attackers flank it.
+  platform(0,-16,10,6,3,C.purple);ramp(8,-16,6,4,'x',3,0);
+  box(-3.6,-13.15,2.8,.45,2.5,3,C.cream,'window left');box(3.6,-13.15,2.8,.45,2.5,3,C.cream,'window right');
+  box(0,-13.15,4.4,.45,.8,3,C.cream,'window sill');box(0,-13.15,10,.45,.5,5.5,C.roof,'window lintel');
+  label('MID / MARKET',0,6.6,-13.4,C.coral,4);
+  // A: ground bell courtyard. Entries: orchard long, west connector, rear alley.
+  const A=new THREE.Vector3(-22,0,-9),B=new THREE.Vector3(22,2,-7);
+  // B: raised greenhouse terrace. Entries: garden long, south connector, rear ramp.
+  platform(22,-7,12,14,2,C.tile);ramp(22,4,4,8,'z',2,0);ramp(22,-18,4,8,'z',0,2);
+  function site(v,color,letter){
+    mesh(new THREE.CylinderGeometry(4,4,.06,32),material(color),v.x,v.y+.04,v.z,false,'site '+letter);
+    const ring=mesh(new THREE.TorusGeometry(3.7,.05,4,48),material(C.cream,true),v.x,v.y+.085,v.z);ring.rotation.x=Math.PI/2;
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const ctx=canvas.getContext('2d');ctx.fillStyle='#344359';ctx.font='bold 175px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(letter,128,135);
+    const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;textures.push(t);const m=new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false});mats.add(m);const l=mesh(new THREE.PlaneGeometry(2.8,2.8),m,v.x,v.y+.085,v.z);l.rotation.x=-Math.PI/2;
   }
-  const navGrid = {
-    cellSize: cs, cols, rows, originX, originZ, walkable, height,
-    worldToCell(x, z) { return [Math.floor((x - originX) / cs), Math.floor((z - originZ) / cs)]; },
-    cellToWorld(c, r) { return new THREE.Vector3(originX + (c + 0.5) * cs, height[r * cols + c], originZ + (r + 0.5) * cs); },
-    isWalkable(c, r) { return c >= 0 && r >= 0 && c < cols && r < rows && walkable[r * cols + c] === 1; },
-    randomWalkable() {
-      for (let i = 0; i < 500; i++) { const c = (Math.random() * cols) | 0, r = (Math.random() * rows) | 0; if (this.isWalkable(c, r)) return this.cellToWorld(c, r); }
-      return this.cellToWorld(cols >> 1, rows >> 1);
-    },
-    findPath(from, to) {
-      const g = this;
-      const nearest = (v) => { // snap to closest walkable cell
-        let [c, r] = g.worldToCell(v.x, v.z);
-        c = Math.min(cols - 1, Math.max(0, c)); r = Math.min(rows - 1, Math.max(0, r));
-        if (g.isWalkable(c, r)) return [c, r];
-        for (let k = 1; k < 8; k++) for (let dr = -k; dr <= k; dr++) for (let dc = -k; dc <= k; dc++) if (g.isWalkable(c + dc, r + dr)) return [c + dc, r + dr];
-        return null;
-      };
-      const s = nearest(from), e = nearest(to);
-      if (!s || !e) return [];
-      const N = cols * rows, gs = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
-      const idx = (c, r) => r * cols + c, si = idx(s[0], s[1]), ei = idx(e[0], e[1]);
-      const hf = (i) => Math.hypot((i % cols) - e[0], ((i / cols) | 0) - e[1]);
-      const open = [[hf(si), si]]; gs[si] = 0;
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-      while (open.length) {
-        let bi = 0; for (let i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
-        const cur = open.splice(bi, 1)[0][1];
-        if (closed[cur]) continue; closed[cur] = 1;
-        if (cur === ei) break;
-        const cc = cur % cols, cr = (cur / cols) | 0;
-        for (const [dc, dr] of dirs) {
-          const nc = cc + dc, nr = cr + dr;
-          if (!g.isWalkable(nc, nr)) continue;
-          if (dc && dr && !(g.isWalkable(cc + dc, cr) && g.isWalkable(cc, cr + dr))) continue;
-          const ni = idx(nc, nr);
-          if (Math.abs(height[ni] - height[cur]) > STEP) continue;
-          const ng = gs[cur] + (dc && dr ? 1.4142 : 1);
-          if (ng < gs[ni]) { gs[ni] = ng; came[ni] = cur; open.push([ng + hf(ni), ni]); }
+  site(A,C.coral,'A');site(B,C.cyan,'B');
+  cover(-24,-6,2.6,1.6,1.15);cover(-19,-11,2.6,1.6,1.25);cover(24,-5,2.6,1.6,1.15,2);cover(19,-10,2.6,1.6,1.25,2);
+  // Bell landmark is outside the circular plant zone and makes A unmistakable.
+  box(-28,-13,3,3,6.2,0,C.coral,'bell tower');
+  mesh(new THREE.BufferGeometry().copy(new THREE.ConeGeometry(2.5,2,4)),material(C.roof),-28,7.2,-13,true,'bell roof');
+  mesh(new THREE.SphereGeometry(.7,8,6),material(C.gold),-28,5.3,-11.45,false,'bell');label('A / CHIME',-26.45,3.8,-13,C.cream,4,Math.PI/2);
+  house(29,-10,2.5,9,6,C.cyan,'greenhouse');
+  for(let z=-13;z<=-7;z+=1.5)detail(27.72,4.4,z,.08,2.6,.5,C.cream);
+  label('B / BLOOM',27.60,3.9,-10,C.cream,4,-Math.PI/2);
+  // Off-angle garden cover plus one protected short route to each site.
+  cover(-25,19,2.5,1.6,1.15,0,C.coral);cover(25,20,2.5,1.6,1.15,0,C.cyan);
+  box(-18,1,1,6,2.8,0,C.coral,'A connector elbow');box(18,9,1,4,2.8,0,C.cyan,'B connector elbow');
+  cover(-11,-7,2.6,1.4,1.2);cover(10,-20,2.6,1.4,1.2);cover(-20,-25,2.6,1.4,1.2);cover(0,24,3,1.4,1.2);
+  label('CHIME ←',-13,2,10.53,C.coral,4);label('→ BLOOM',14,2,7.48,C.cyan,4,Math.PI);
+  // Flankable orchard perch: cannot cover both sites and mid at once.
+  platform(-24,5,7,6,2.4,C.tile);ramp(-24,12,4,8,'z',2.4,0);
+  cover(-26,5,1.5,2,1,2.4,C.coral);
+  // Round toy trees with short, opaque trunks. Their crowns are non-solid decor.
+  for(const[x,z]of[[-30,26],[30,26],[-30,-26],[30,-26],[-5,22],[5,23],[-22,-29],[21,-29]]){
+    box(x,z,.5,.5,2.7,0,0x8d7061,'tree trunk');mesh(new THREE.IcosahedronGeometry(1.7,1),material(C.green),x,3.5,z,false,'tree');
+  }
+  // Outside scenery: distant grass hills and white cloud puffs, all non-solid.
+  for(const[x,z,r]of[[-60,-80,30],[45,-85,40],[-90,10,35],[90,10,30]])mesh(new THREE.SphereGeometry(r,16,8),material(0x92baa1),x,-r*.6,z,false,'hill');
+
+  // The signature skyline: giant origami kites tethered to each landmark.
+  // They sit well above combat space and intentionally do not stop shots.
+  function kite(x,y,z,size,color){
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([0,size,0,-size*.7,0,0,0,0,.4, size*.7,0,0,0,size,0,0,0,.4, 0,-size*1.1,0,size*.7,0,0,0,0,.4, -size*.7,0,0,0,-size*1.1,0,0,0,.4],3));g.computeVertexNormals();
+    const km=new THREE.MeshLambertMaterial({color,side:THREE.DoubleSide,flatShading:true});mats.add(km);const o=mesh(g,km,x,y,z,false,'signature kite');o.rotation.y=.25;
+    const points=[new THREE.Vector3(x,y-size,z),new THREE.Vector3(x+.9,y-size-2,z),new THREE.Vector3(x-.5,y-size-4,z),new THREE.Vector3(x+.5,y-size-6,z)];
+    const tail=new THREE.CatmullRomCurve3(points);mesh(new THREE.TubeGeometry(tail,20,.055,4,false),material(C.cream),0,0,0,false,'kite tail');
+    for(let i=0;i<3;i++){const bow=mesh(new THREE.OctahedronGeometry(.35,0),material(i%2?C.cyan:C.coral),x+(i%2?.7:-.3),y-size-2-i*1.5,z,false,'ribbon');bow.scale.set(1.6,.45,.25);}
+  }
+  kite(-26,15,-15,3.8,C.coral);kite(26,14,-9,3.2,C.cyan);
+  kite(-55,22,-70,4,C.gold);kite(40,30,-85,5,C.coral);
+  const spawnPoints=[];
+  for(const team of ['T','CT'])for(const x of [0,-4,4,-8,8])spawnPoints.push({position:new THREE.Vector3(x,0,team==='T'?28:-30),yaw:team==='T'?Math.PI:0,team});
+  const lights=new THREE.Group();lights.add(new THREE.HemisphereLight(0xcceeff,0x8cad72,2));
+  const sun=new THREE.DirectionalLight(0xfff3df,2);sun.position.set(-30,55,20);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+  Object.assign(sun.shadow.camera,{left:-40,right:40,top:40,bottom:-40,near:1,far:140});sun.shadow.bias=-.001;sun.shadow.normalBias=.025;lights.add(sun);group.add(lights);
+  function getHeight(x,z){
+    if(x<-HALF||x>HALF||z<-HALF||z>HALF)return -Infinity;
+    let h=0;for(const f of floors)if(x>=f.minX&&x<=f.maxX&&z>=f.minZ&&z<=f.maxZ)h=Math.max(h,f.y);
+    for(const r of ramps)if(x>=r.minX&&x<=r.maxX&&z>=r.minZ&&z<=r.maxZ){const t=r.axis==='x'?(x-r.minX)/(r.maxX-r.minX):(z-r.minZ)/(r.maxZ-r.minZ);h=Math.max(h,r.y0+(r.y1-r.y0)*t);}return h;
+  }
+  // Top-surface navigation. Radius inflation and diagonal height checks prevent
+  // corner cutting, including shortcuts across the steep sides of ramps.
+  const cs=1,cols=64,rows=64,originX=-32,originZ=-32;
+  const walkable=new Uint8Array(cols*rows),height=new Float32Array(cols*rows),valid=[];
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const x=originX+c+.5,z=originZ+r+.5,y=getHeight(x,z),i=r*cols+c;height[i]=y;
+    walkable[i]=Number.isFinite(y)&&!colliders.some(b=>x>b.min.x-.45&&x<b.max.x+.45&&z>b.min.z-.45&&z<b.max.z+.45&&b.max.y>y+.5&&b.min.y<y+1.8)?1:0;
+    if(walkable[i])valid.push(i);
+  }
+  const navGrid={cellSize:cs,cols,rows,originX,originZ,walkable,height,
+    worldToCell(x,z){return[Math.floor(x-originX),Math.floor(z-originZ)];},
+    cellToWorld(c,r){return new THREE.Vector3(originX+c+.5,height[r*cols+c],originZ+r+.5);},
+    isWalkable(c,r){return c>=0&&r>=0&&c<cols&&r<rows&&walkable[r*cols+c]===1;},
+    randomWalkable(){const i=valid[Math.floor(Math.random()*valid.length)];return this.cellToWorld(i%cols,Math.floor(i/cols));},
+    findPath(from,to){
+      const nearest=v=>{let[c,r]=this.worldToCell(v.x,v.z);c=Math.max(0,Math.min(63,c));r=Math.max(0,Math.min(63,r));
+        for(let k=0;k<10;k++){let best=-1,dist=Infinity;for(let dr=-k;dr<=k;dr++)for(let dc=-k;dc<=k;dc++)if(this.isWalkable(c+dc,r+dr)){
+          const i=(r+dr)*cols+c+dc,d=dc*dc+dr*dr+Math.abs(height[i]-v.y)*4;if(d<dist){dist=d;best=i;}}
+          if(best>=0)return best;}return -1;};
+      const start=nearest(from),end=nearest(to);if(start<0||end<0)return[];
+      const g=new Float32Array(4096).fill(Infinity),prev=new Int32Array(4096).fill(-1),closed=new Uint8Array(4096),open=[];
+      const h=i=>Math.hypot(i%64-end%64,Math.floor(i/64)-Math.floor(end/64));g[start]=0;open.push([h(start),start]);
+      const pass=(c,r,i)=>this.isWalkable(c,r)&&Math.abs(height[r*64+c]-height[i])<=STEP;
+      while(open.length){let bi=0;for(let k=1;k<open.length;k++)if(open[k][0]<open[bi][0])bi=k;
+        const i=open.splice(bi,1)[0][1];if(closed[i])continue;closed[i]=1;if(i===end)break;const c=i%64,r=Math.floor(i/64);
+        for(const[dc,dr]of[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+          const nc=c+dc,nr=r+dr;if(!pass(nc,nr,i))continue;
+          if(dc&&dr&&(!pass(c+dc,r,i)||!pass(c,r+dr,i)))continue;
+          const ni=nr*64+nc,cost=g[i]+Math.hypot(dc,dr)+Math.abs(height[ni]-height[i])*.15;
+          if(cost<g[ni]){g[ni]=cost;prev[ni]=i;open.push([cost+h(ni),ni]);}
         }
       }
-      if (!closed[ei]) return [];
-      const out = []; for (let i = ei; i !== -1; i = came[i]) out.push(g.cellToWorld(i % cols, (i / cols) | 0));
-      out.reverse(); return out;
+      if(!closed[end])return[];const out=[];for(let i=end;i>=0;i=prev[i])out.push(this.cellToWorld(i%64,Math.floor(i/64)));return out.reverse();
     }
   };
-
-  return {
-    group, lights, colliders, getHeight, stepHeight: STEP, spawnPoints, navGrid, floors, ramps,
-    bombsites: {
-      A: { center: A.clone(), radius: 5, box: new THREE.Box3(new THREE.Vector3(A.x - 5, -1, A.z - 5), new THREE.Vector3(A.x + 5, 3, A.z + 5)) },
-      B: { center: B.clone(), radius: 4.5, box: new THREE.Box3(new THREE.Vector3(B.x - 4.5, ROOF - 1, B.z - 4.5), new THREE.Vector3(B.x + 4.5, ROOF + 3, B.z + 4.5)) }
-    },
-    bounds: { minX: -HALF, maxX: HALF, minZ: -HALF, maxZ: HALF },
-    sky: { background: 0x9fdcff, fog: { color: 0xbfe8ff, near: 60, far: 160 } },
-    dispose() { geos.forEach(g => g.dispose()); mats.forEach(m => m.dispose()); }
-  };
+  // Explicit physics surfaces. Integration must prefer these over synthesized
+  // legacy 3m-deep roof boxes. surfaceOnly ramps need thin-slab ray intersections.
+  const physicsColliders=[...colliders];
+  for(const f of floors)if(f.y>0)physicsColliders.push({name:'deck surface',min:{x:f.minX,y:f.y-.18,z:f.minZ},max:{x:f.maxX,y:f.y,z:f.maxZ}});
+  for(const r of ramps)physicsColliders.push({name:'ramp surface',type:'ramp',surfaceOnly:true,thickness:.18,axis:r.axis,direction:r.y1>r.y0?1:-1,
+    min:{x:r.minX,y:Math.min(r.y0,r.y1),z:r.minZ},max:{x:r.maxX,y:Math.max(r.y0,r.y1),z:r.maxZ}});
+  const bombsites={};for(const[k,v]of Object.entries({A,B}))bombsites[k]={center:v.clone(),radius:4,box:new THREE.Box3(new THREE.Vector3(v.x-4,v.y-1,v.z-4),new THREE.Vector3(v.x+4,v.y+3,v.z+4))};
+  return{group,lights,colliders,physicsColliders,floors,ramps,getHeight,stepHeight:STEP,spawnPoints,bombsites,navGrid,
+    bounds:{minX:-32,maxX:32,minZ:-32,maxZ:32},sky:{background:0xb4dcf0,fog:{color:0xb4dcf0,near:75,far:190}},
+    dispose(){for(const g of geos)g.dispose();for(const m of mats)m.dispose();for(const t of textures)t.dispose();sun.shadow.map?.dispose();}};
 }
 export default buildMap;

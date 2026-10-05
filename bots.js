@@ -75,7 +75,7 @@ export function createBots(THREE, scene, map, opts) {
     const legs = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.28), new THREE.MeshLambertMaterial({ color: 0x2f3550, flatShading: true })); legs.position.y = 0.3; group.add(legs);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), skin); head.position.y = 1.62; group.add(head);
     const gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.55), gunMat); gun.position.set(0.28, 1.1, -0.3); group.add(gun);
-    const bar = makeBar(); bar.spr.position.y = 2.05; group.add(bar.spr);
+    const bar = makeBar(); bar.spr.position.y = 2.05; Object.defineProperty(bar.spr, 'visible', { get: () => false, set() {} }); group.add(bar.spr);
     group.position.set(pos.x, pos.y, pos.z); scene.add(group);
     const b = {
       id: 'bot' + nextId++, group, bodyMat, baseColor: col, bar,

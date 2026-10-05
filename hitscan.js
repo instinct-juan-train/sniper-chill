@@ -62,7 +62,8 @@ function rayRamp(o,d,c,maxDistance){
     const n={x:0,y:0,z:0};n[axis]=1;planes.push([n,b.max[axis]]);
     const m={x:0,y:0,z:0};m[axis]=-1;planes.push([m,-b.min[axis]]);
   }
-  planes.push([{x:0,y:-1,z:0},-b.min.y]);
+  if(c.surfaceOnly){const bottom={x:0,y:-1,z:0};bottom[a]=slope;planes.push([bottom,-intercept+(c.thickness??.18)]);}
+  else planes.push([{x:0,y:-1,z:0},-b.min.y]);
   const top={x:0,y:1,z:0};top[a]=-slope;planes.push([top,intercept]);
   let near=0,far=maxDistance,normal={x:0,y:0,z:0};
   for(const [n,k] of planes){

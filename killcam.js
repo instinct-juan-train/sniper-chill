@@ -93,7 +93,7 @@ export function createKillCam(THREE, opts) {
   // ---------- shared assets ----------
   const geoBox = new THREE.BoxGeometry(1, 1, 1);
   const geoCyl = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5); // unit, base at 0, +z
-  const geoCore = new THREE.CylinderGeometry(0.035, 0.035, 0.55, 8).rotateX(Math.PI / 2);
+  const geoCore = new THREE.CylinderGeometry(0.012, 0.012, 0.55, 8).rotateX(Math.PI / 2);
   const geoRing = new THREE.RingGeometry(0.85, 1, 40);
   const geoSph = new THREE.SphereGeometry(1, 8, 6);
   const mkTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); return t; };
@@ -191,7 +191,7 @@ export function createKillCam(THREE, opts) {
     const big = !!sh.cine, v = bulletVisual(cfg.colors.bullet, big);
     const b = Object.assign({ sh, s: 0, dist: sh.dist, speed: (sh.weapon === 'sniper' ? cfg.sniperSpeed : cfg.bulletSpeed), driven: big, done: false, fade: 0, ringAt: 0, sparkAt: 0 }, v);
     b.g.position.copy(sh.muzzle); b.g.quaternion.setFromUnitVectors(V(0, 0, 1), sh.dir); b.trail.quaternion.copy(b.g.quaternion);
-    b.rad = big ? 0.05 : 0.018; b.tlen = big ? cfg.trailLength * 0.6 : cfg.trailLength; bullets.push(b); return b;
+    b.rad = big ? 0.02 : 0.008; b.tlen = big ? cfg.trailLength * 0.6 : cfg.trailLength; bullets.push(b); return b;
   }
   function placeBullet(b) {
     const sh = b.sh, p = sh.muzzle.clone().addScaledVector(sh.dir, b.s);
@@ -285,7 +285,7 @@ export function createKillCam(THREE, opts) {
   // ---------- cinematic ----------
   function shouldCine(sh) {
     const h = sh.hit; if (!cfg.enabled || cine || !h || h.kind !== 'target' || !h.killed) return false;
-    if (sh.force) return true; if (clock - lastCineEnd < cfg.cooldown) return false;
+    if (cfg.gate && !cfg.gate()) return false; if (sh.force) return true; if (clock - lastCineEnd < cfg.cooldown) return false;
     if (h.headshot && cfg.headshotAlways) return true;
     return cfg.bodyKills === 'always' || (cfg.bodyKills === 'far' && sh.dist >= cfg.minDistance);
   }
