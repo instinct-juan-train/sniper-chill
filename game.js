@@ -16,23 +16,22 @@ import { createStreaks } from './streaks.js';
 import { createEconomy, WEAPON_STATS } from './economy.js';
 import { createDestruction } from './destruction.js';
 import { createGrenades } from './grenades.js';
-import { playIntro, menuBackdrop, logoHTML } from './intro.js';
+import { playIntro } from './intro.js';
+import { buildMenu } from './menu.js';
+import { createCharacter, ROSTER } from './characters.js';
 
 const CSS = `
 @font-face{font-family:Fredoka;font-weight:500;src:url('./Fredoka-Medium.ttf') format('truetype');font-display:swap}
 @font-face{font-family:Fredoka;font-weight:600 900;src:url('./Fredoka-Bold.ttf') format('truetype');font-display:swap}
 .sg{font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
 .sg canvas.main{width:100%;height:100%;display:block}
-.sg .scb{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:30;display:none;align-items:stretch;pointer-events:none;filter:drop-shadow(0 4px 0 rgba(0,0,0,.28));font-family:Fredoka,system-ui,sans-serif;color:#fff}
-.sg .scb small{display:block;font-size:11px;font-weight:600;letter-spacing:.14em;opacity:.9;line-height:1}
-.sg .sbt{min-width:104px;padding:7px 18px 8px;text-align:center;border:3px solid #fff;display:flex;flex-direction:column;align-items:center;gap:2px}
-.sg .sbt b{font-size:34px;line-height:1;font-weight:700;text-shadow:0 2px 0 rgba(0,0,0,.25)}
-.sg .sbt.me{background:linear-gradient(#37c97c,#1f9d5c);border-radius:20px 8px 8px 20px;border-right-width:0}
-.sg .sbt.bt{background:linear-gradient(#ff9a3c,#e06a14);border-radius:8px 20px 20px 8px;border-left-width:0}
-.sg .sbm{background:linear-gradient(#2a3b55,#1a2539);border:3px solid #fff;border-radius:12px;margin:-3px -1px;padding:8px 16px 6px;text-align:center;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:70px}
-.sg .sbm b{font-size:24px;line-height:1;font-weight:700;color:#ffd166}.sg .sbm b span{font-size:15px;opacity:.7}
-.sg .pip{display:inline-block;width:12px;height:12px;border-radius:50%;margin:0 3px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.55);box-sizing:border-box}
-.sg .pip.on{background:var(--c);border-color:#fff;box-shadow:0 0 6px var(--c)}
+.sg .scb{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:30;display:none;align-items:center;gap:10px;pointer-events:none;background:rgba(14,20,28,.55);border-radius:999px;padding:4px 16px;font-family:Fredoka,system-ui,sans-serif;color:#fff;backdrop-filter:blur(3px)}
+.sg .scb b{font-size:20px;font-weight:600;line-height:1;min-width:14px;text-align:center}
+.sg .scb .sep{opacity:.5;font-size:16px}
+.sg .scb .rd{font-size:10px;letter-spacing:.14em;opacity:.65;font-weight:500}
+.sg .scb .pips{display:flex;gap:3px}
+.sg .pip{display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)}
+.sg .pip.on{background:var(--c)}
 .sg .setov{position:absolute;inset:0;z-index:400;background:rgba(14,22,34,.82);align-items:center;justify-content:center}
 .sg .setp{background:#1d2b3d;border:3px solid #fff;border-radius:22px;padding:22px 28px;min-width:min(420px,88vw);display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 0 rgba(0,0,0,.3)}
 .sg .setp h2{margin:0 0 4px;font-size:30px}
@@ -42,6 +41,17 @@ const CSS = `
 .sg .sr input[type=checkbox]{width:24px;height:24px;accent-color:#37c97c}
 .sg .sr input[type=range]{accent-color:#ffd166;width:100%}
 .sg .sr select{font:inherit;padding:8px;border-radius:10px;border:0;background:#2e4259;color:#fff}
+.sg .invb{position:absolute;right:24px;bottom:112px;z-index:22;display:flex;gap:6px;align-items:flex-end;pointer-events:none;font-family:Fredoka,system-ui,sans-serif}
+.sg .invb .it{min-width:58px;padding:6px 9px 5px;border-radius:12px;background:rgba(16,27,32,.62);border:2px solid rgba(255,255,255,.28);text-align:center;color:#fff;line-height:1.05;position:relative;transition:transform .12s,background .12s}
+.sg .invb .it kbd{position:absolute;top:-9px;left:-4px;background:#ffd166;color:#222;font:700 12px Fredoka,system-ui;padding:1px 6px;border-radius:7px;border:2px solid #fff}
+.sg .invb .it b{display:block;font-size:12px;font-weight:600;letter-spacing:.03em;white-space:nowrap}
+.sg .invb .it small{font-size:11px;opacity:.75;font-weight:500}
+.sg .invb .it.cur{background:rgba(255,209,102,.9);color:#222;border-color:#fff;transform:translateY(-5px) scale(1.06)}
+.sg .invb .it.cur small{opacity:.8}
+.sg .invb .it.empty{opacity:.4}
+.sg .invb .it.gr{background:rgba(54,98,150,.7)}
+.sg .invb .sep{width:6px}
+.sg .invh{position:absolute;right:24px;bottom:176px;z-index:22;font-weight:600;font-size:12px;color:#ffe9a8;text-shadow:0 1px 3px #000;pointer-events:none;opacity:0;transition:opacity .3s;text-align:right}
 .sg .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(20,30,45,.74);text-align:center;padding:16px;z-index:100}
 .sg .ov h2{margin:0;font-size:clamp(24px,4.5vw,44px)}
 .sg .ov p{margin:0;font-size:clamp(12px,1.6vw,16px);opacity:.92;max-width:680px;line-height:1.45}
@@ -112,6 +122,8 @@ export class Game {
     this.match = { p: 0, b: 0, round: 1, over: false };
     this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;left:8px;top:8px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
     this.setOv = document.createElement('div'); this.setOv.className = 'setov'; this.setOv.style.display = 'none'; root.appendChild(this.setOv);
+    this.invb = document.createElement('div'); this.invb.className = 'invb'; this.invb.style.display = 'none'; root.appendChild(this.invb); this.invh = document.createElement('div'); this.invh.className = 'invh'; root.appendChild(this.invh); this.invSig = '';
+    this.knifeOn = false; this.knifeCd = 0; this.slashT = -1; this.makeKnife();
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
     this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
     this.fx = []; this.cineOK = false;
@@ -140,8 +152,8 @@ export class Game {
       if (this.state !== 'play') return;
       if (this.streaks.controlling || (this.eco && this.eco.getState().menuOpen)) { return; }
       if (!this.ctrl.state.pointerLocked) this.ctrl.requestPointerLock();
-      if (e.button === 0) this.ws.setTrigger(true);
-      if (e.button === 2) { this.aimDownAt = performance.now(); if (this.ws.aiming) { this.ws.setAim(false); this.aimSkipUp = true; } else this.ws.setAim(true); }
+      if (e.button === 0) { if (this.knifeOn) this.slash(); else this.ws.setTrigger(true); }
+      if (e.button === 2 && !this.knifeOn) { this.aimDownAt = performance.now(); if (this.ws.aiming) { this.ws.setAim(false); this.aimSkipUp = true; } else this.ws.setAim(true); }
       e.preventDefault();
     });
     d.addEventListener('mouseup', (e) => {
@@ -158,11 +170,65 @@ export class Game {
       if (this.state !== 'play') return;
       if (e.code === 'Escape') { if (this.setOv.style.display !== 'none') { this.closeSettings(); return; } this.pause(); return; }
       if (this.eco && this.eco.getState().menuOpen) return;
-      if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary');
+      if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary'); else if (e.code === 'Digit3' && !e.repeat) this.toggleKnife();
       if (!e.repeat && ['KeyV', 'KeyH', 'KeyJ'].includes(e.code)) { this.throwGrenade({ KeyV: 'frag', KeyH: 'smoke', KeyJ: 'flash' }[e.code]); return; }
-      else if (e.code === 'KeyR') this.ws.reload(); else if (e.code === 'KeyE') { this.eDown = true; if (!e.repeat) this.tryPickup(); }
+      else if (e.code === 'KeyR') { if (!this.knifeOn) this.ws.reload(); } else if (e.code === 'KeyE') { this.eDown = true; if (!e.repeat) this.tryPickup(); }
     });
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
+  }
+  makeKnife() {
+    const k = new THREE.Group(), mat = (c) => new THREE.MeshToonMaterial({ color: c });
+    const bx = (w, h, d, c, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y, z); k.add(m); return m; };
+    bx(0.022, 0.07, 0.3, 0xe8f4ff, 0, 0.012, -0.2); bx(0.026, 0.012, 0.3, 0xffffff, 0, 0.05, -0.2); // blade + spine
+    bx(0.07, 0.02, 0.025, 0xffb347, 0, -0.02, -0.04); bx(0.035, 0.04, 0.13, 0xff7a3c, 0, -0.03, 0.03); // guard + handle
+    bx(0.055, 0.05, 0.08, 0xf2c9a0, 0, -0.03, 0.02); bx(0.06, 0.05, 0.14, 0x2a6fd6, 0.0, -0.03, 0.14); // hand + sleeve
+    k.visible = false; k.userData.home = new THREE.Vector3(0.2, -0.2, -0.36); k.position.copy(k.userData.home); k.rotation.set(0.1, 0.15, 0);
+    this.camera.add(k); this.knife = k;
+  }
+  toggleKnife() { if (this.knifeOn) { const inv = this.eco.getState().inventory; this.pick('primary'); if (this.knifeOn) this.unKnife(); return; } this.ws.setTrigger(false); this.ws.setAim(false); this.knifeOn = true; this.vm.group.visible = false; this.knife.visible = true; this.slashT = -1; play('ui_click'); }
+  unKnife() { if (!this.knifeOn) return; this.knifeOn = false; this.knife.visible = false; this.vm.group.visible = true; }
+  slash() {
+    if (!this.player.alive || this.knifeCd > 0 || this.state !== 'play') return;
+    const es = this.eco.getState(); if (es.menuOpen) return;
+    this.knifeCd = 0.42; this.slashT = 0; play('hit');
+    const o = this.ctrl.state.eye, d = this.ctrl.getDirection(); let best = null, bd = 1e9;
+    for (const b of this.bots.list) {
+      if (!b.alive) continue; const p = b.position, vx = p.x - o.x, vy = p.y + 1.0 - o.y, vz = p.z - o.z, dist = Math.hypot(vx, vy, vz);
+      if (dist > 2.7 || dist < 0.01) continue; const dot = (vx * d.x + vy * d.y + vz * d.z) / dist; if (dot < 0.55) continue;
+      const wall = raycast(o, { x: vx / dist, y: vy / dist, z: vz / dist }, { colliders: this.world, maxDistance: dist }); if (wall) continue;
+      if (dist < bd) { bd = dist; best = { b, dist, dir: { x: vx / dist, y: vy / dist, z: vz / dist }, point: { x: p.x, y: p.y + 1.0, z: p.z } }; }
+    }
+    if (!best) return;
+    const b = best.b, fx = -Math.sin(b.yaw || 0), fz = -Math.cos(b.yaw || 0), back = fx * d.x + fz * d.z > 0.35, dmg = back ? 200 : 55;
+    const hp0 = b.health, hp = Math.max(0, hp0 - dmg), killed = hp <= 0;
+    this.bots.damage(b, hp, false); this.cineOK = killed && this.bots.aliveCount() <= 1;
+    try { this.killfx.hit({ bot: b, point: best.point, zone: 'body', weapon: 'knife', damage: hp0 - hp, killed, headshot: false, origin: o, dir: best.dir, distance: best.dist, scoped: false, last: this.cineOK }); } catch (e) { try { this.killfx.hit({ bot: b, point: best.point, zone: 'body', weapon: 'pistol', damage: hp0 - hp, killed, headshot: false, origin: o, dir: best.dir, distance: best.dist, scoped: false, last: this.cineOK }); } catch (e2) {} }
+    play(killed ? 'kill' : 'hit');
+    if (killed) {
+      this.streaks.registerKill({ headshot: false }); this.eco.recordKill({ id: b.id, headshot: false, weapon: 'pistol' });
+      const bw = (b.ch && b.ch.weapon) || 'machinegun'; this.addDrop({ dropId: 'bot-' + b.id + '-' + Date.now(), weapon: bw, ammo: { mag: 12, reserve: 24 }, position: { x: b.position.x, y: b.position.y, z: b.position.z } });
+      this.kills++; this.score += back ? 150 : 100; this.kf.textContent = back ? 'APUÑALADA +150' : 'Baja +100'; this.kfT = 1.5;
+    } else { this.kf.textContent = 'Corte -55'; this.kfT = 0.8; }
+  }
+  updateKnife(dt) {
+    if (this.knifeCd > 0) this.knifeCd -= dt;
+    const k = this.knife; if (!k.visible) return; const h = k.userData.home;
+    if (this.slashT >= 0) { this.slashT += dt; const t = Math.min(1, this.slashT / 0.3), e = Math.sin(t * Math.PI);
+      k.position.set(h.x - 0.38 * t + 0.1 * e, h.y + 0.1 * e - 0.05 * t, h.z - 0.12 * e); k.rotation.set(0.1 - 0.9 * e, 0.15 + 1.2 * t, -0.9 * e + 0.5 * t); if (t >= 1) this.slashT = -1; }
+    else { const b = Math.sin(performance.now() / 600) * 0.004; k.position.set(h.x, h.y + b, h.z); k.rotation.set(0.1, 0.15, 0); }
+  }
+  renderInv() {
+    const es = this.eco.getState(), inv = es.inventory, cur = this.knifeOn ? 'knife' : this.ws.current, gr = inv.grenades || {};
+    const nm = (id) => (id && WEAPON_STATS[id] && WEAPON_STATS[id].name) || id || '';
+    const sig = [inv.primary, inv.secondary, cur, gr.frag, gr.smoke, gr.flash, this.state].join('|'); if (sig === this.invSig) return; this.invSig = sig;
+    const it = (key, label, sub, on, extra = '') => `<div class="it${on ? ' cur' : ''}${extra}"><kbd>${key}</kbd><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+    let h = '';
+    h += inv.primary ? it('1', nm(inv.primary), '', cur === inv.primary) : it('1', 'Principal', 'vacío', false, ' empty');
+    h += it('2', nm(inv.secondary || 'pistol'), '', cur === (inv.secondary || 'pistol'));
+    h += it('3', 'Cuchillo', '', cur === 'knife');
+    const gl = [['V', 'frag', 'Frag'], ['H', 'smoke', 'Humo'], ['J', 'flash', 'Flash']].filter(([, id]) => gr[id] > 0);
+    if (gl.length) { h += '<div class="sep"></div>'; for (const [k, id, lab] of gl) h += it(k, lab, '×' + gr[id], false, ' gr'); }
+    this.invb.innerHTML = h;
   }
   throwGrenade(type) {
     const s = this.eco.getState();
@@ -191,7 +257,7 @@ export class Game {
       for (const id of [inv.primary, inv.secondary]) { if (id && !this.owned.has(id)) { this.owned.add(id); const a = inv.ammo[id]; if (a) { this.ws.ammo[id].mag = a.mag; this.ws.ammo[id].reserve = a.reserve; } } }
       for (const id of Array.from(this.owned)) if (id !== inv.primary && id !== inv.secondary) this.owned.delete(id);
       if (!this.owned.has(this.ws.current)) { this.ws.select(inv.secondary || 'pistol'); }
-      if (n === 'equip' && d.weapon) this.ws.select(d.weapon);
+      if (n === 'equip' && d.weapon) { this.unKnife(); this.ws.select(d.weapon); }
     } else if (n === 'drop') { if (d.drop) this.addDrop(d.drop); else if (d.dropId) this.addDrop(d); }
     else if (n === 'reward' || n === 'money') { /* eco chip shows money */ }
   }
@@ -199,7 +265,7 @@ export class Game {
   renderSB() {
     const m = this.match, pips = (w, c) => Array.from({ length: 3 }, (_, i) => `<i class="pip${i < w ? ' on' : ''}" style="--c:${c}"></i>`).join('');
     this.sb.style.display = this.state === 'menu' ? 'none' : 'flex';
-    this.sb.innerHTML = `<div class="sbt me"><small>TÚ</small><b>${m.p}</b><div>${pips(m.p, '#7dffb0')}</div></div><div class="sbm"><small>RONDA</small><b>${Math.min(5, m.round)}<span>/5</span></b></div><div class="sbt bt"><small>BOTS</small><b>${m.b}</b><div>${pips(m.b, '#ffb35c')}</div></div>`;
+    this.sb.innerHTML = `<span class="pips">${pips(m.p, '#7dffb0')}</span><b>${m.p}</b><span class="sep">:</span><b>${m.b}</b><span class="pips">${pips(m.b, '#ffb35c')}</span><span class="rd">R${Math.min(5, m.round)}/5</span>`;
   }
   loadSettings() { let s = {}; try { s = JSON.parse(localStorage.getItem('sc_settings') || '{}'); } catch (e) {} this.set = Object.assign({ fps: false, sens: 1, vol: 0.7, diff: this.diff }, s); }
   saveSettings() { try { localStorage.setItem('sc_settings', JSON.stringify(this.set)); } catch (e) {} }
@@ -255,23 +321,18 @@ export class Game {
     for (const d of this.drops || []) d.t += dt;
     const n = this.nearestDrop(); this.hint.textContent = n ? 'E · recoger ' + (WEAPON_STATS[n.drop.weapon] ? WEAPON_STATS[n.drop.weapon].name : n.drop.weapon) : '';
   }
-  pick(slot) { const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
+  pick(slot) { this.unKnife(); const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
   overlay(html, btns) {
     if (this.menuStop) { this.menuStop(); this.menuStop = null; }
     this.ov.style.display = 'flex'; this.ov.innerHTML = html;
     const row = document.createElement('div'); row.className = 'row';
     for (const [t, fn, alt] of btns) { const b = document.createElement('button'); b.className = 'b' + (alt ? ' alt' : ''); b.textContent = t; b.onclick = fn; row.appendChild(b); }
-    this.ov.appendChild(row);
+    if (btns.length) this.ov.appendChild(row);
   }
   showMenu() {
     this.state = 'menu'; this.sb.style.display = 'none'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
-    this.overlay(`<div class="chm"><div class="chl">${logoHTML()}</div><p style="font-weight:600;letter-spacing:.3em;font-size:14px;opacity:.9">CHILL · AIM · ENJOY</p>
-<p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
-<p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>B</b> tienda · <b>E</b> recoger/plantar · <b>R</b> recargar · <b>Shift</b> agacharte · <b>espacio</b> saltar</p>
-<p><b>Rachas:</b> <b>G</b> usa la primera (3 bajas UAV · 5 misil · 7 coche RC · 9 ataque aéreo). Granadas: <b>V</b> frag, <b>H</b> humo, <b>J</b> flash.</p></div>`,
-      [['Jugar contra bots', () => this.start('bomb')], ['Ajustes', () => this.openSettings(), true]]);
-    if (this.menuStop) this.menuStop(); this.menuStop = menuBackdrop(this.ov);
+    this.overlay('', []); this.menuStop = buildMenu(this, THREE, createCharacter, ROSTER);
   }
   pause() {
     if (this.state !== 'play') return;
@@ -284,7 +345,7 @@ export class Game {
     if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
     this.grenades.clearRound();
     if (cont && this.match.round < 5) this.match.round++;
-    this.mode = mode; this.killfx.reset(); if (cont && !newMatch) this.streaks.cancel('round'); else this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
+    this.unKnife(); this.mode = mode; this.killfx.reset(); if (cont && !newMatch) this.streaks.cancel('round'); else this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
     this.score = 0; this.kills = 0; this.heads = 0; this.roundT = mode === 'bomb' ? 150 : 60; this.spawnTimer = 0.5; this.over = false; this.kf.textContent = '';
@@ -341,7 +402,7 @@ export class Game {
     }
   }
   update(dt) {
-    const c = this.ctrl, st = c.state;
+    const c = this.ctrl, st = c.state; this.updateKnife(dt); this.invb.style.display = this.state === 'play' && !this.kcHide ? 'flex' : 'none'; this.renderInv();
     const es = this.eco.getState(); this.eco.update(dt);
     this.updateDrops(dt);
     if (es.menuOpen) {
