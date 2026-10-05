@@ -297,6 +297,7 @@ export class Game {
   }
   syncAmmoToEco() { if (!this.eco) return; for (const id of ['pistol', 'machinegun', 'sniper']) { const a = this.ws.ammo[id]; if (a && this.eco.getState().inventory.ammo[id]) this.eco.setAmmo(id, { mag: a.mag, reserve: a.reserve }); } }
   onEco(n, d) {
+    if (n === 'purchase') play('buy'); else if (n === 'denied') play('buy_fail'); else if (n === 'pickup') play('ui_click');
     if (n === 'menu') {
       if (d.open) { this.syncAmmoToEco(); this.ws.setTrigger(false); this.eDown = false; this.ctrl.exitPointerLock(); }
       else if (this.state === 'play') { try { this.ctrl.requestPointerLock(); } catch (e) {} }
