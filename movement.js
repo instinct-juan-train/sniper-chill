@@ -27,6 +27,10 @@ function surface(c,b,x,z) {
   const t=clamp((p-b.min[a])/(b.max[a]-b.min[a] || 1),0,1);
   return b.min.y+(b.max.y-b.min.y)*(c.direction===-1?1-t:t);
 }
+function bottom(c,b,x,z) {
+  if(c.type==='ramp'&&c.surfaceOnly) return surface(c,b,x,z)-(c.thickness??.18);
+  return b.min.y;
+}
 export function createController(initialColliders=[], options={}) {
   let colliders=initialColliders;
   const opt={radius:.28,height:1.8,crouchHeight:1.12,eyeInset:.16,
@@ -49,7 +53,7 @@ export function createController(initialColliders=[], options={}) {
   function clearAt(y,h,x=p.x,z=p.z,except=null) {
     for(const c of colliders){const b=bounds(c);if(!b||c===except||!horizontalOverlap(b,x,z))continue;
       const top=surface(c,b,x,z);
-      if(y<top-EPS&&y+h>b.min.y+EPS)return false;
+      if(y<top-EPS&&y+h>bottom(c,b,x,z)+EPS)return false;
     }return true;
   }
   function support(x,z,fromY,maxRise=0) {
@@ -68,15 +72,18 @@ export function createController(initialColliders=[], options={}) {
     p[axis]+=delta;
     for(const c of colliders){const b=bounds(c);if(!b||!horizontalOverlap(b))continue;
       const top=surface(c,b,p.x,p.z);
-      if(p.y>=top-EPS||p.y+height<=b.min.y+EPS)continue;
+      if(p.y>=top-EPS||p.y+height<=bottom(c,b,p.x,p.z)+EPS)continue;
       const rise=top-p.y;
       let stepAllowed=wasGrounded&&rise<=opt.stepHeight+EPS;
       if(c.type==='ramp'){
         const a=c.axis==='x'?'x':'z',slope=(b.max.y-b.min.y)/Math.max(EPS,b.max[a]-b.min[a]);
         // Tiny per-substep ramp ascent is continuous, not a box step.
-        stepAllowed=wasGrounded&&slope<=Math.tan(opt.maxSlope)&&rise<=opt.stepHeight+Math.abs(delta)*slope+EPS;
+        stepAllowed=slope<=Math.tan(opt.maxSlope)&&rise<=opt.stepHeight+Math.abs(delta)*slope+EPS&&(wasGrounded||v.y<=2);
       }
       if(stepAllowed&&clearAt(top,height,p.x,p.z,c)){p.y=top;continue;}
+      const old=p[axis]-delta;
+      p[axis]=old; const wasIn=horizontalOverlap(b); p[axis]=old+delta;
+      if(wasIn||c.type==='ramp'){p[axis]=old;v[axis]=0;continue;} // already inside the footprint (ramp/deck edge): never teleport across it
       p[axis]=delta>0?b.min[axis]-opt.radius:b.max[axis]+opt.radius;
       v[axis]=0;
     }
@@ -129,7 +136,7 @@ export function createController(initialColliders=[], options={}) {
       p.y+=v.y*h;grounded=false;
       if(v.y>0){
         for(const c of colliders){const b=bounds(c);if(!b||!horizontalOverlap(b))continue;
-          if(oldY+height<=b.min.y+EPS&&p.y+height>=b.min.y){p.y=b.min.y-height;v.y=0;}
+          {const bt=bottom(c,b,p.x,p.z);if(oldY+height<=bt+EPS&&p.y+height>=bt){p.y=bt-height;v.y=0;}}
         }
       }else{
         const floor=support(p.x,p.z,oldY,.025);
