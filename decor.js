@@ -39,7 +39,7 @@ export function addDecor(THREE, map, parent) {
           if (alongX) box(0xfff3da, a, y0 + h / 2, face + sd * 0.07, 0.34, h, 0.14); else box(0xfff3da, face + sd * 0.07, y0 + h / 2, a, 0.14, h, 0.34);
         } else if (h >= 3 && len >= 6) { // painted window + shutters + flower box
           const wy = y0 + 1.95, sc = shut[(n + (sd > 0 ? 1 : 3)) % shut.length], fl = flowers[n % flowers.length];
-          const T = (dx, dy, ww, hh, c, dd = 0.05, off = 0.03) => { if (alongX) box(c, a + dx, wy + dy, face + sd * (off + dd / 2), ww, hh, dd); else box(c, face + sd * (off + dd / 2), wy + dy, a + dx, dd, hh, ww); };
+          const T = (dx, dy, ww, hh, c, dd = 0.05, off0 = 0.03) => { const off = Math.max(off0, 0.025); if (alongX) box(c, a + dx, wy + dy, face + sd * (off + dd / 2), ww, hh, dd); else box(c, face + sd * (off + dd / 2), wy + dy, a + dx, dd, hh, ww); };
           T(0, 0, 1.3, 1.6, 0xfff3da, 0.06, 0.01); T(0, 0, 1.0, 1.3, 0x8fc8e8, 0.08, 0.02); T(0, 0, 0.06, 1.3, 0xfff3da, 0.1, 0.02); T(0, 0, 1.0, 0.06, 0xfff3da, 0.1, 0.02);
           T(-0.82, 0, 0.42, 1.5, sc, 0.07, 0.02); T(0.82, 0, 0.42, 1.5, sc, 0.07, 0.02);
           T(0, -1.0, 1.3, 0.26, 0xb98b64, 0.34, 0.01); for (let k = -1; k <= 1; k++) T(k * 0.4, -0.8, 0.28, 0.24, k === 0 ? 0x73b787 : fl, 0.3, 0.05);
@@ -84,7 +84,7 @@ export function addDecor(THREE, map, parent) {
   // build meshes
   for (const [, b] of batches) {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(b.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3)); geo.setIndex(b.i);
-    const m = new THREE.MeshLambertMaterial({ color: b.color, flatShading: true, transparent: b.alpha < 1, opacity: b.alpha, depthWrite: b.alpha >= 1 }); const mesh = new THREE.Mesh(geo, m); mesh.userData.decor = true; mesh.frustumCulled = true; g.add(mesh);
+    const m = new THREE.MeshLambertMaterial({ color: b.color, flatShading: true, transparent: b.alpha < 1, opacity: b.alpha, depthWrite: b.alpha >= 1, polygonOffset: true, polygonOffsetFactor: b.alpha < 1 ? -4 : -2, polygonOffsetUnits: b.alpha < 1 ? -4 : -2 }); const mesh = new THREE.Mesh(geo, m); mesh.userData.decor = true; mesh.frustumCulled = true; g.add(mesh);
   }
   parent.add(g); return g;
 }

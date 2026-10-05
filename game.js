@@ -87,7 +87,7 @@ export class Game {
     this.map = buildMap(THREE); this.scene.add(this.map.group); try { if (!/[?&]nodecor/.test(location.search)) addDecor(THREE, this.map, this.scene); } catch (e) { console.warn('decor failed', e); }
     this.scene.background = new THREE.Color(this.map.sky.background);
     this.scene.fog = new THREE.Fog(this.map.sky.fog.color, this.map.sky.fog.near, this.map.sky.fog.far);
-    this.camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 400); this.scene.add(this.camera);
+    this.camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 300); this.scene.add(this.camera);
     try { this.look = /[?&]look=off/.test(location.search) ? null : applyLook(THREE, this.renderer, this.scene, this.map); } catch (err) { console.error('look', err); this.look = null; }
 
     // physics world: map blocking boxes + roof slabs + ramps (from the map's floor/ramp data)
