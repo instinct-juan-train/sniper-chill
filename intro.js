@@ -42,16 +42,68 @@ export function startConfetti(cv, { burst = 0, rain = 40, speed = 1 } = {}) {
   return () => { run = false; removeEventListener('resize', size); };
 }
 
+const BO3_CSS = `
+@keyframes bo-bar{from{height:0}to{height:12vh}}
+@keyframes bo-slam{0%{transform:scale(3.2);opacity:0;filter:blur(14px)}55%{transform:scale(.94);opacity:1;filter:blur(0)}75%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes bo-out{to{opacity:0;transform:scale(.7);filter:blur(10px)}}
+@keyframes bo-flash{0%{opacity:.95}100%{opacity:0}}
+@keyframes bo-shake{0%,100%{transform:translate(0,0)}20%{transform:translate(-9px,5px)}40%{transform:translate(8px,-6px)}60%{transform:translate(-5px,-4px)}80%{transform:translate(4px,6px)}}
+@keyframes bo-sweep{from{transform:translateX(-120%) skewX(-20deg)}to{transform:translateX(260%) skewX(-20deg)}}
+@keyframes bo-blink{50%{opacity:.25}}
+@keyframes bo-grain{0%{background-position:0 0}100%{background-position:120px 80px}}
+.boi{position:absolute;inset:0;z-index:500;background:#05070d;overflow:hidden;font-family:'Teko',Fredoka,Impact,system-ui,sans-serif;color:#fff;transition:opacity .5s}
+.boi.out{opacity:0;pointer-events:none}
+.boi canvas{position:absolute;inset:0;width:100%;height:100%}
+.boi .bar{position:absolute;left:0;right:0;background:#000;z-index:5;animation:bo-bar .5s ease-out forwards}.boi .bar.t{top:0}.boi .bar.b{bottom:0}
+.boi .vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.85));z-index:4;pointer-events:none}
+.boi .grain{position:absolute;inset:-60px;opacity:.07;z-index:4;pointer-events:none;background-image:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);animation:bo-grain .4s linear infinite}
+.boi .stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:3}
+.boi .card{position:absolute;font-weight:600;font-size:clamp(70px,17vw,230px);letter-spacing:.06em;line-height:1;opacity:0;text-shadow:3px 0 #ff2d55,-3px 0 #19e3ff,0 8px 40px rgba(0,0,0,.8);animation:bo-slam .38s cubic-bezier(.2,.9,.2,1) forwards,bo-out .18s ease-in forwards}
+.boi .logo{position:absolute;display:flex;flex-direction:column;align-items:center;opacity:0;animation:bo-slam .55s .0s cubic-bezier(.2,.9,.2,1) forwards}
+.boi .logo b{font-weight:600;font-size:clamp(80px,19vw,260px);letter-spacing:.05em;line-height:.95;background:linear-gradient(180deg,#fff 30%,#ffd166 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(4px 0 0 #ff2d55) drop-shadow(-4px 0 0 #19e3ff) drop-shadow(0 10px 30px rgba(0,0,0,.7))}
+.boi .logo i{font-style:normal;font-weight:500;font-size:clamp(14px,2.4vw,30px);letter-spacing:.7em;opacity:.85;margin-top:6px;padding-left:.7em;color:#9ad1ff}
+.boi .sweep{position:absolute;top:0;bottom:0;width:18%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);z-index:4;pointer-events:none;animation:bo-sweep .9s ease-in-out forwards}
+.boi .fl{position:absolute;inset:0;background:#fff;z-index:6;pointer-events:none;opacity:0}
+.boi .fl.on{animation:bo-flash .35s ease-out forwards}
+.boi .skip{position:absolute;right:5vw;bottom:15vh;z-index:7;font-size:20px;letter-spacing:.3em;opacity:.8;animation:bo-blink 1.1s infinite}
+.boi.shake .stage{animation:bo-shake .28s}
+`;
 export function playIntro(root, onDone) {
   ensureCSS();
-  const el = document.createElement('div'); el.className = 'chi';
-  el.innerHTML = `<canvas></canvas><div class="chl">${logoHTML()}</div><div class="cht">CHILL · AIM · ENJOY</div><div class="chs">click to skip</div>`;
+  if (!document.getElementById('bo-css')) { const st = document.createElement('style'); st.id = 'bo-css'; st.textContent = "@import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;600&display=swap');" + BO3_CSS; document.head.appendChild(st); }
+  const el = document.createElement('div'); el.className = 'boi';
+  el.innerHTML = `<canvas></canvas><div class="stage"></div><div class="fl"></div><div class="vig"></div><div class="grain"></div><div class="bar t"></div><div class="bar b"></div><div class="skip">PRESS ENTER</div>`;
   root.appendChild(el);
-  const stop = startConfetti(el.querySelector('canvas'), { burst: 140, rain: 30 });
-  let done = false;
-  const finish = () => { if (done) return; done = true; el.classList.add('out'); removeEventListener('keydown', finish, true); setTimeout(() => { stop(); el.remove(); }, 550); onDone && onDone(); };
+  const stage = el.querySelector('.stage'), fl = el.querySelector('.fl'), cv = el.querySelector('canvas'), cx = cv.getContext('2d');
+  const snd = (n, v) => { try { window.ChillAudio && window.ChillAudio.play(n, { volume: v }); } catch (e) {} };
+  let done = false, raf = 0, boost = 0, W = 0, H = 0;
+  const rays = Array.from({ length: 90 }, () => ({ a: Math.random() * Math.PI * 2, s: 0.2 + Math.random() * 0.8, o: Math.random() }));
+  const resize = () => { W = cv.width = root.clientWidth || innerWidth; H = cv.height = root.clientHeight || innerHeight; }; resize();
+  let t0 = performance.now();
+  const draw = (now) => {
+    if (done) return; raf = requestAnimationFrame(draw);
+    const dt = Math.min(0.05, (now - t0) / 1000); t0 = now; boost = Math.max(0, boost - dt * 1.6);
+    cx.clearRect(0, 0, W, H); cx.save(); cx.translate(W / 2, H / 2);
+    const R = Math.hypot(W, H) / 2;
+    for (const r of rays) { r.o += dt * (0.25 + boost * 2.6) * r.s; if (r.o > 1) { r.o = 0; r.a = Math.random() * Math.PI * 2; } const a0 = R * (0.12 + r.o * 0.9), a1 = a0 + R * (0.04 + boost * 0.35) * r.s; cx.strokeStyle = `rgba(${r.s > .6 ? '25,227,255' : '255,45,85'},${(1 - r.o) * (0.12 + boost * 0.7)})`; cx.lineWidth = 1 + r.s * 2; cx.beginPath(); cx.moveTo(Math.cos(r.a) * a0, Math.sin(r.a) * a0); cx.lineTo(Math.cos(r.a) * a1, Math.sin(r.a) * a1); cx.stroke(); }
+    cx.restore();
+  };
+  raf = requestAnimationFrame(draw);
+  const hit = (txt, ms) => {
+    const c = document.createElement('div'); c.className = 'card'; c.textContent = txt; c.style.animationDelay = '0s,' + (ms - 0.2) + 's'; stage.appendChild(c);
+    boost = 1; fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); snd('hit', 0.9);
+  };
+  const T = [];
+  const at = (ms, f) => T.push(setTimeout(f, ms));
+  at(500, () => hit('CHILL', 0.55)); at(1050, () => hit('AIM', 0.5)); at(1550, () => hit('ENJOY', 0.5));
+  at(2150, () => {
+    stage.innerHTML = `<div class="logo"><b>CHILLOPS</b><i>TACTICAL CHILL SHOOTER</i></div>`;
+    boost = 1.6; fl.classList.remove('on'); void fl.offsetWidth; fl.classList.add('on'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    const sw = document.createElement('div'); sw.className = 'sweep'; el.appendChild(sw); snd('uiStart', 1); snd('bombExplosion', 0.45);
+  });
+  const finish = () => { if (done) return; done = true; T.forEach(clearTimeout); cancelAnimationFrame(raf); el.classList.add('out'); removeEventListener('keydown', finish, true); setTimeout(() => el.remove(), 550); onDone && onDone(); };
   el.addEventListener('click', finish); addEventListener('keydown', finish, true);
-  setTimeout(finish, 3200);
+  at(6200, finish);
   return finish;
 }
 
