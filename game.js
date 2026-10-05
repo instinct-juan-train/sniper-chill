@@ -396,6 +396,19 @@ export class Game {
     H.grp.visible = a > 0.02; if (a >= 0.5 && !H.hid) { H.hid = true; H.was = this.vm.group.visible; this.vm.group.visible = false; } else if (a < 0.5 && H.hid) { H.hid = false; this.vm.group.visible = this.knifeOn ? false : true; }
     if (H.grp.visible) { const t = performance.now() / 1000; H.grp.position.set(0, -0.42 + 0.22 * a, -0.5); H.grp.rotation.set(0.5 - 0.25 * a, 0, 0); H.hr.position.y = Math.abs(Math.sin(t * 7)) * 0.03; H.led.visible = Math.sin(t * 14) > 0; }
   }
+  startDeathCam(from, msg) {
+    if (!from) { this.end(false, msg); return; }
+    this.deathCam = { t: 0, from: from.clone ? from.clone() : new THREE.Vector3(from.x, from.y, from.z), msg, banner: document.createElement('div') };
+    const b = this.deathCam.banner; b.style.cssText = 'position:absolute;left:50%;bottom:14%;transform:translateX(-50%);z-index:40;font:600 34px Fredoka,system-ui;letter-spacing:.14em;color:#fff;text-shadow:0 0 4px #000,0 3px 10px rgba(0,0,0,.8);pointer-events:none'; b.textContent = 'ELIMINATED'; this.root.appendChild(b);
+    try { this.vm.group.visible = false; } catch (e) {} this.hud.root.style.display = 'none';
+  }
+  deathCamApply(real) {
+    const d = this.deathCam; if (!d) return; d.t += real;
+    const pe = this.ctrl.state.eye, k = Math.min(1, d.t / 0.5);
+    this.camera.position.set(d.from.x + (pe.x - d.from.x) * 0.03, d.from.y + 0.05, d.from.z + (pe.z - d.from.z) * 0.03);
+    this.camera.lookAt(pe.x, pe.y - 0.1 * k, pe.z); this.camera.fov = 75 - 20 * k; this.camera.updateProjectionMatrix();
+    if (d.t > 2.4) { d.banner.remove(); this.deathCam = null; this.hud.root.style.display = ''; this.camera.fov = 75; this.camera.updateProjectionMatrix(); try { this.vm.group.visible = true; } catch (e) {} this.end(false, d.msg); }
+  }
   openMP() { if (this.menuStop) { this.menuStop(); this.menuStop = null; } this.ov.style.display = 'none'; this.mp.open(); }
   renderMP() { if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera); }
   showMenu() {
@@ -556,7 +569,7 @@ export class Game {
     for (const e of events) {
       if (e.type === 'shot') {
         play('bot_shot', e.from); this.anim.onBotShot(e.hit ? e : { ...e, to: e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)) });
-        if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.end(false, 'Te han eliminado.'); } }
+        if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.startDeathCam(e.from, 'You were eliminated.'); } }
       } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'The bomb was defused.'); }
     }
     this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: [] });
@@ -593,14 +606,14 @@ export class Game {
     if (!this.running) return; requestAnimationFrame(this.loop);
     { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')'; p.n = 0; p.t = 0; p.worst = 0; } }
     const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
-    const dt = real * this.kc.update(real) * this.killfx.update(real);
+    const dt = real * this.kc.update(real) * this.killfx.update(real) * (this.deathCam ? 0.35 : 1);
     if (this.mp && this.mp.active) { this.mp.frame(real); return; }
     this.updateBlast(dt);
     if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
     if (this.state === 'play') { this.destruction.update(dt); const es = this.eco.getState(); if (es.phase === 'live' && !es.menuOpen) this.grenades.update(dt); this.update(dt); }
     else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); this.anim.update(dt, { bots: [] }); }
-    this.kc.applyCamera(); this.killfx.applyCamera(this.camera);
+    this.kc.applyCamera(); this.killfx.applyCamera(this.camera); if (this.deathCam) this.deathCamApply(real);
     if (this.shake > 0.01) { const s = this.shake; this.camera.position.x += (Math.random() - .5) * 0.5 * s; this.camera.position.y += (Math.random() - .5) * 0.5 * s; this.camera.rotation.z += (Math.random() - .5) * 0.05 * s; this.shake *= Math.pow(0.02, dt); }
     if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
     this.kc.afterRender();
