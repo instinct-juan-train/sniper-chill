@@ -61,7 +61,7 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const list = el.querySelector('.mn-list'), pan = el.querySelector('.mn-pan'); let sel = 0; const btns = [];
   const panels = {
     streaks: () => `<h3>STREAKS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} KILLS · KEY ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G uses the first one. You lose your streak if you die; surviving the round keeps it.</p>`,
-    help: () => `<h3>CONTROLS</h3><div class="mn-keys">${[['WASD', 'Move'], ['Mouse', 'Aim'], ['Click', 'Shoot'], ['Right click', 'Scope'], ['Shift', 'Crouch'], ['Espacio', 'Jump'], ['R', 'Reload'], ['E', 'Pick up / plant'], ['B', 'Shop'], ['1 2 3', 'Weapons / knife'], ['V H J', 'Grenades'], ['G', 'Use streak'], ['Esc', 'Pause']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
+    help: () => `<h3>CONTROLS</h3><div class="mn-keys">${[['WASD', 'Move'], ['Mouse', 'Aim'], ['Click', 'Shoot'], ['Right click', 'Scope'], ['Shift', 'Crouch'], ['Space', 'Jump'], ['R', 'Reload'], ['E', 'Pick up / plant'], ['B', 'Shop'], ['1 2 3', 'Weapons / knife'], ['V H J', 'Grenades'], ['G', 'Use streak'], ['Esc', 'Pause']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
   };
   const show = () => { const it = items[sel]; pan.innerHTML = it.p ? panels[it.p]() : ''; };
   const setSel = (i) => { if (items[i].gap) return; sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };

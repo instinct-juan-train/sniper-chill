@@ -166,7 +166,7 @@ export class Game {
       if (this.state !== 'play') return;
       if (this.streaks.controlling || (this.eco && this.eco.getState().menuOpen)) { return; }
       if (!this.ctrl.state.pointerLocked) this.ctrl.requestPointerLock();
-      if (e.button === 0) { if (this.knifeOn) this.slash(); else this.ws.setTrigger(true); }
+      if (e.button === 0 && this.plantT <= 0) { if (this.knifeOn) this.slash(); else this.ws.setTrigger(true); }
       if (e.button === 2 && !this.knifeOn) { this.aimDownAt = performance.now(); if (this.ws.aiming) { this.ws.setAim(false); this.aimSkipUp = true; } else this.ws.setAim(true); }
       e.preventDefault();
     });
@@ -384,6 +384,18 @@ export class Game {
     for (const [t, fn, alt] of btns) { const b = document.createElement('button'); b.className = 'b' + (alt ? ' alt' : ''); b.textContent = t; b.onclick = fn; row.appendChild(b); }
     if (btns.length) this.ov.appendChild(row);
   }
+  plantAnimTick(dt) {
+    if (!this.handBomb) {
+      const grp = new THREE.Group(), box = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.09, 0.13), new THREE.MeshLambertMaterial({ color: 0x2b3340 }));
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b3b })); led.position.set(0.07, 0.05, 0);
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.01, 0.07), new THREE.MeshBasicMaterial({ color: 0x7fe3ff })); pad.position.set(-0.03, 0.05, 0);
+      const skin = new THREE.MeshLambertMaterial({ color: 0xf2c9a0 }), hl = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.09), skin), hr = hl.clone(); hl.position.set(-0.12, 0, 0.05); hr.position.set(0.12, 0, 0.05);
+      grp.add(box, led, pad, hl, hr); grp.visible = false; this.camera.add(grp); this.handBomb = { grp, led, hr, a: 0 };
+    }
+    const H = this.handBomb, want = this.plantT > 0 ? 1 : 0; H.a += (want - H.a) * Math.min(1, dt * 10); const a = H.a;
+    H.grp.visible = a > 0.02; if (a >= 0.5 && !H.hid) { H.hid = true; H.was = this.vm.group.visible; this.vm.group.visible = false; } else if (a < 0.5 && H.hid) { H.hid = false; this.vm.group.visible = this.knifeOn ? false : true; }
+    if (H.grp.visible) { const t = performance.now() / 1000; H.grp.position.set(0, -0.42 + 0.22 * a, -0.5); H.grp.rotation.set(0.5 - 0.25 * a, 0, 0); H.hr.position.y = Math.abs(Math.sin(t * 7)) * 0.03; H.led.visible = Math.sin(t * 14) > 0; }
+  }
   openMP() { if (this.menuStop) { this.menuStop(); this.menuStop = null; } this.ov.style.display = 'none'; this.mp.open(); }
   renderMP() { if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera); }
   showMenu() {
@@ -518,7 +530,8 @@ export class Game {
       this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: [] });
       return;
     }
-    const shots = this.streaks.controlling ? [] : this.ws.update(dt, { moving, sprinting: st.speed > 5.5, grounded: st.grounded });
+    if (this.plantT > 0) this.ws.setTrigger(false);
+    const shots0 = this.streaks.controlling ? [] : this.ws.update(dt, { moving, sprinting: st.speed > 5.5, grounded: st.grounded }); const shots = this.plantT > 0 ? [] : shots0;
     if (shots.length) this.fireShots(shots);
     const fwd = c.getDirection(); setListener(st.eye, fwd);
     if (moving && st.grounded) { this.stepT -= dt; if (this.stepT <= 0) { play('footstep'); this.stepT = st.speed > 5.5 ? 0.3 : 0.45; } }
@@ -530,9 +543,10 @@ export class Game {
     for (const key of ['A', 'B']) { const s = bs[key], d = Math.hypot(st.position.x - s.center.x, st.position.z - s.center.z); if (d < s.radius && Math.abs(st.position.y - s.center.y) < 2) site = key; }
     let hint = '';
     if (this.mode === 'bomb' && !this.bomb.planted) {
-      if (site && this.eDown && st.grounded) { this.plantT += dt; hint = `Plantando ${site}... ${Math.min(100, Math.round(this.plantT / 3.2 * 100))}%`; if (this.plantT >= 3.2) this.plant(site); }
+      if (site && this.eDown && st.grounded) { this.plantT += dt; hint = `Planting ${site}... ${Math.min(100, Math.round(this.plantT / 3.2 * 100))}%`; if (this.plantT >= 3.2) this.plant(site); }
       else { this.plantT = 0; hint = site ? `Hold E to plant at ${site}` : 'Go to site A or B'; }
     }
+    this.plantAnimTick(dt);
     // bots
     const self = this;
     const events = this.bots.update(dt, {
@@ -543,7 +557,7 @@ export class Game {
       if (e.type === 'shot') {
         play('bot_shot', e.from); this.anim.onBotShot(e.hit ? e : { ...e, to: e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)) });
         if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.end(false, 'Te han eliminado.'); } }
-      } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'Desactivaron la bomba.'); }
+      } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'The bomb was defused.'); }
     }
     this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: [] });
     if (this.over) return;
