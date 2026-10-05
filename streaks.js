@@ -21,14 +21,24 @@ export const DEFAULT_CONFIG = {
 };
 
 const CSS = `
+.sk .tab{position:absolute;left:50%;bottom:0;width:min(74vw,780px,100vh);transform:translate(-50%,115%) rotateX(24deg);transform-origin:50% 100%;transition:transform .38s cubic-bezier(.2,.9,.25,1.05);perspective:900px;display:block}
+.sk .tab.on{transform:translate(-50%,3%) rotateX(7deg)}
+.sk .tab .bz{background:#2a2f4a;border:3px solid #141830;border-radius:26px;padding:12px 12px 14px;box-shadow:0 -6px 30px rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,255,255,.12);position:relative}
+.sk .tab .hd{display:flex;justify-content:space-between;align-items:center;padding:0 8px 8px;font-weight:700;font-size:15px;letter-spacing:.04em}
+.sk .tab .hd b{color:#ffd166;font-size:17px}
+.sk .tab canvas{display:block;width:100%;border-radius:14px;background:#cfe9d8}
+.sk .tab .ft{text-align:center;padding-top:8px;font-size:14px;font-weight:600;opacity:.95}
+.sk .tab .th{position:absolute;bottom:-26px;width:76px;height:96px;border-radius:40px 40px 18px 18px;background:#f2c9a0;border:3px solid #141830}
+.sk .tab .th.l{left:-16px;transform:rotate(18deg)}.sk .tab .th.r{right:-16px;transform:rotate(-18deg)}
+
 .sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none}
-.sk .tray{position:absolute;right:12px;top:13%;display:flex;flex-direction:column;gap:9px;align-items:flex-end}
-.sk .slot{position:relative;width:52px;height:52px;border-radius:12px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
-.sk .slot svg{width:24px;height:24px}
-.sk .slot .k{position:absolute;top:-7px;left:-7px;background:#ffd166;color:#222;border-radius:7px;padding:0 7px;font-size:12px;line-height:18px;text-shadow:none}
-.sk .slot .t{font-size:9px;letter-spacing:.06em;opacity:.9;margin-top:2px}
+.sk .tray{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;flex-direction:row;gap:12px;align-items:flex-end}
+.sk .slot{position:relative;width:62px;height:62px;border-radius:12px;background:rgba(10,14,30,.5);border:2px solid rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
+.sk .slot svg{width:38px;height:38px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.5))}
+.sk .slot .k{position:absolute;top:-7px;left:-7px;background:#ffd166;color:#222;border-radius:7px;padding:0 8px;font-size:14px;font-weight:800;line-height:20px;text-shadow:none}
+.sk .slot .t{font-size:12px;font-weight:700;letter-spacing:.03em;opacity:1;margin-top:1px}
 .sk .slot .n{position:absolute;right:5px;bottom:2px;font-size:13px}
-.sk .slot.have{background:rgba(255,209,102,.28);border-color:#ffd166;transform:translateX(-8px) scale(1.12);animation:skp .9s ease-in-out infinite;box-shadow:0 0 14px 2px rgba(255,209,102,.75)}
+.sk .slot.have{background:rgba(255,209,102,.28);border-color:#ffd166;transform:translateY(-8px) scale(1.1);animation:skp .9s ease-in-out infinite;box-shadow:0 0 14px 2px rgba(255,209,102,.75)}
 .sk .slot.act{background:rgba(82,240,160,.35);border-color:#52f0a0}
 @keyframes skp{50%{box-shadow:0 0 26px 7px rgba(255,209,102,.95);background:rgba(255,209,102,.55)}}
 .sk .streak{position:absolute;right:12px;top:calc(13% - 26px);font-weight:700;font-size:12px;letter-spacing:.14em;text-shadow:0 2px 0 rgba(0,0,0,.55);display:flex;gap:6px;align-items:center}
@@ -56,10 +66,10 @@ const CSS = `
 .sk .bar i{display:block;height:100%;background:#ffd166;width:100%}
 `;
 const ICON = {
-  uav: '<svg viewBox="0 0 32 32" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="16" cy="16" r="3" fill="#fff"/><path d="M8 16a8 8 0 0 1 8-8M4 16A12 12 0 0 1 16 4M24 16a8 8 0 0 1-8 8M28 16a12 12 0 0 1-12 12"/></svg>',
-  missile: '<svg viewBox="0 0 32 32" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"><path d="M16 3l5 8v12h-10V11z"/><path d="M11 18l-5 8h5zM21 18l5 8h-5z"/></svg>',
-  rc: '<svg viewBox="0 0 32 32" fill="#fff"><rect x="5" y="13" width="22" height="8" rx="3"/><circle cx="10" cy="23" r="3.2"/><circle cx="22" cy="23" r="3.2"/><rect x="15" y="6" width="2.4" height="8"/><circle cx="16.2" cy="5" r="2.2"/></svg>',
-  airstrike: '<svg viewBox="0 0 32 32" fill="#fff"><path d="M16 3l3 5h-6zM7 12l3 5H4zM25 12l3 5h-6zM16 20l3 5h-6z"/><rect x="15" y="8" width="2" height="9"/></svg>',
+  uav: '<svg viewBox="0 0 40 40" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="20" cy="22" r="14" stroke-opacity=".45"/><circle cx="20" cy="22" r="8" stroke-opacity=".7"/><path d="M20 22L31 11" stroke="#7dffb0"/><circle cx="20" cy="22" r="2.5" fill="#fff" stroke="none"/><circle cx="12" cy="27" r="2.2" fill="#ff6b6b" stroke="none"/><circle cx="27" cy="29" r="2.2" fill="#ff6b6b" stroke="none"/></svg>',
+  missile: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.4" stroke-linejoin="round"><g transform="rotate(40 20 20)"><path d="M20 3c4 4 5 9 5 15v12H15V18c0-6 1-11 5-15z" fill="#fff"/><path d="M20 3c3 3 4.5 7 4.8 11h-9.6c.3-4 1.8-8 4.8-11z" fill="#ff6b6b"/><path d="M15 24l-6 8h6zM25 24l6 8h-6z" fill="#ffd166"/><path d="M17 30h6l-3 7z" fill="#ff9a3c"/></g></svg>',
+  rc: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.4" stroke-linejoin="round"><path d="M5 24l3-7h16l5 5h6v6H5z" fill="#ffd166"/><path d="M11 17l2-4h8l3 4z" fill="#9ad1ff"/><circle cx="12" cy="28" r="5" fill="#444"/><circle cx="30" cy="28" r="5" fill="#444"/><circle cx="12" cy="28" r="1.8" fill="#ccc" stroke="none"/><circle cx="30" cy="28" r="1.8" fill="#ccc" stroke="none"/><path d="M28 17l3-9" stroke="#fff" stroke-width="2"/><circle cx="31" cy="7" r="2" fill="#ff6b6b"/></svg>',
+  airstrike: '<svg viewBox="0 0 40 40" stroke="#222" stroke-width="1.3" stroke-linejoin="round"><g fill="#fff"><path d="M8 4l4 0 2 11-4 0z" transform="rotate(-12 11 10)"/><path d="M18 2l4 0 1 13-6 0z"/><path d="M28 4l4 0-2 11-4 0z" transform="rotate(12 29 10)"/></g><g fill="#ff6b6b" stroke="none"><circle cx="11" cy="31" r="4"/><circle cx="20" cy="33" r="4"/><circle cx="29" cy="31" r="4"/></g><path d="M5 37h30" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
 };
 const mm = (v, a, b) => Math.max(a, Math.min(b, v));
 const dirOf = (yaw, pitch) => { const c = Math.cos(pitch); return { x: -Math.sin(yaw) * c, y: Math.sin(pitch), z: -Math.cos(yaw) * c }; };
@@ -77,7 +87,7 @@ export function createStreaks(ctx) {
   const world = ctx.world || [];
   const listeners = {};
   const emit = (n, d) => { for (const f of (listeners[n] || [])) { try { f(d); } catch (e) { console.error(e); } } for (const f of (listeners['*'] || [])) { try { f(n, d); } catch (e) { console.error(e); } } };
-  const S = { cfg, count: 0, inv: {}, active: null, uav: null, fx: [], strikes: [], shake: 0, enabled: true };
+  const S = { missiles: [], tablet: null, cfg, count: 0, inv: {}, active: null, uav: null, fx: [], strikes: [], shake: 0, enabled: true };
   const keys = new Set();
   const mouseDown = { l: false };
   const look = { dx: 0, dy: 0 };
@@ -85,7 +95,7 @@ export function createStreaks(ctx) {
   // ---------- DOM ----------
   if (!document.getElementById('sk-css')) { const s = document.createElement('style'); s.id = 'sk-css'; s.textContent = CSS; document.head.appendChild(s); }
   const dom = document.createElement('div'); dom.className = 'sk'; root.appendChild(dom);
-  dom.innerHTML = `<canvas class="mini" width="300" height="300"></canvas><div class="minilab"></div><div class="streak"></div><div class="tray"></div><div class="banner"><b></b><span></span></div>
+  dom.innerHTML = `<canvas class="mini" width="300" height="300"></canvas><div class="minilab"></div><div class="streak"></div><div class="tray"></div><div class="banner"><b></b><span></span></div><div class="tab"><div class="bz"><div class="hd"><b class="tt"></b><span>TACTICAL TABLET</span></div><canvas width="780" height="500"></canvas><div class="ft"></div><i class="th l"></i><i class="th r"></i></div></div>
   <div class="ctl"><div class="vig"></div><div class="scan"></div><div class="ret"><i></i></div><div class="rd top"></div><div class="bar"><i></i></div><div class="rd bot"></div></div>`;
   const $ = (s) => dom.querySelector(s);
   const mini = $('.mini'), minilab = $('.minilab'), streakEl = $('.streak'), tray = $('.tray'), banner = $('.banner'), ctl = $('.ctl'), rdTop = $('.rd.top'), rdBot = $('.rd.bot'), barI = $('.bar i');
@@ -376,18 +386,87 @@ export function createStreaks(ctx) {
     }
   }
 
+
+  // ---------- tablet (airstrike / guided missile): 2D plan map, no live view ----------
+  const tabEl = $('.tab'), tabCv = tabEl.querySelector('canvas'), tabTt = tabEl.querySelector('.tt'), tabFt = tabEl.querySelector('.ft');
+  function openTablet(id) {
+    const st = ctrl.state; S.tablet = { id, x: st.position.x - Math.sin(st.yaw) * 14, z: st.position.z - Math.cos(st.yaw) * 14, t: 0, closing: 0, picked: null };
+    ctrl.setEnabled(false); if (ctx.vm) ctx.vm.group.visible = false; look.dx = look.dy = 0;
+    tabTt.textContent = id === 'missile' ? 'GUIDED MISSILE' : 'AIRSTRIKE';
+    tabFt.textContent = 'Move the mouse to aim · Click to call it in · Esc or Q to put the tablet away';
+    tabEl.classList.add('on'); play('ui_click'); emit('takeover', { active: true, kind: 'tablet' });
+  }
+  function closeTablet(refund) {
+    const T = S.tablet; if (!T) return; tabEl.classList.remove('on'); S.tablet = null;
+    if (refund) { S.inv[T.id] = (S.inv[T.id] || 0) + 1; }
+    ctrl.setEnabled(true); if (ctx.vm) ctx.vm.group.visible = true; emit('takeover', { active: false, kind: 'tablet' }); refreshHud();
+  }
+  function confirmTablet() {
+    const T = S.tablet; if (!T || T.closing) return; const st = ctrl.state, id = T.id;
+    const tp = { x: T.x, z: T.z }, ty = isFinite(map.getHeight(tp.x, tp.z)) ? map.getHeight(tp.x, tp.z) : 0; T.closing = 0.42; T.pick = { id, tp, ty };
+    tabEl.classList.remove('on'); play('bomb_beep');
+  }
+  function launchPick(p) {
+    const st = ctrl.state;
+    if (p.id === 'airstrike') {
+      const c = cfg.airstrike; let fx = p.tp.x - st.position.x, fz = p.tp.z - st.position.z; const l = Math.hypot(fx, fz) || 1; const fwd = { x: fx / l, z: fz / l };
+      marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, 2.2, 0xff5a7a, c.delay + c.bombs * c.interval + 0.8);
+      S.strikes.push({ t: -c.delay, i: 0, tp: { x: p.tp.x, y: p.ty, z: p.tp.z }, fwd, drops: [] });
+      showBanner('Airstrike inbound', 'Target marked on the map. Stay clear of the zone!', 2.4);
+    } else {
+      const c = cfg.missile; marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, c.blastRadius * 0.5, 0xff5a7a, 3.2);
+      const m = new THREE.Mesh(geo.cone, new THREE.MeshLambertMaterial({ color: 0xff6b6b, flatShading: true })); m.scale.set(0.7, 2.4, 0.7); m.rotation.x = Math.PI; scene.add(m);
+      S.missiles.push({ m, x: p.tp.x, z: p.tp.z, gy: p.ty, y: p.ty + c.startHeight, t: 0 });
+      showBanner('Missile launched', 'Impact in a few seconds. Get clear!', 2.4);
+    }
+    play('bomb_beep'); emit('called', { id: p.id, target: { x: p.tp.x, z: p.tp.z } }); refreshHud();
+  }
+  function updateMissiles(dt) {
+    const c = cfg.missile;
+    for (let k = S.missiles.length - 1; k >= 0; k--) {
+      const d = S.missiles[k]; d.t += dt; d.y -= (50 + d.t * 70) * dt; d.m.position.set(d.x, d.y, d.z);
+      if (d.y <= d.gy + 0.3) { scene.remove(d.m); S.missiles.splice(k, 1); S.shake = Math.max(S.shake, 2); explode({ x: d.x, y: d.gy + 0.4, z: d.z }, { radius: c.blastRadius, maxDamage: c.maxDamage, minDamage: c.minDamage, source: 'missile', alert: c.alertBots }); emit('ended', { id: 'missile', reason: 'detonated' }); }
+    }
+  }
+  function drawTablet(dt) {
+    const T = S.tablet; if (!T) return; T.t += dt; const st = ctrl.state, cv = tabCv, c = cv.getContext('2d'), W = cv.width, H = cv.height;
+    const B = map.bounds || { minX: -35, maxX: 35, minZ: -35, maxZ: 35 }, sc = Math.min((W - 24) / (B.maxX - B.minX), (H - 24) / (B.maxZ - B.minZ)), ox = W / 2 - (B.minX + B.maxX) / 2 * sc, oz = H / 2 - (B.minZ + B.maxZ) / 2 * sc;
+    const X = (x) => ox + x * sc, Z = (z) => oz + z * sc;
+    // cursor from mouse deltas
+    T.x = mm(T.x + look.dx * 0.12 / (sc / 6), B.minX, B.maxX); T.z = mm(T.z + look.dy * 0.12 / (sc / 6), B.minZ, B.maxZ); look.dx = look.dy = 0;
+    c.clearRect(0, 0, W, H); c.fillStyle = '#d8efdc'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#c6e4cf'; c.fillRect(X(B.minX), Z(B.minZ), (B.maxX - B.minX) * sc, (B.maxZ - B.minZ) * sc);
+    c.strokeStyle = 'rgba(40,60,90,.14)'; c.lineWidth = 1; for (let g = Math.ceil(B.minX / 10) * 10; g <= B.maxX; g += 10) { c.beginPath(); c.moveTo(X(g), Z(B.minZ)); c.lineTo(X(g), Z(B.maxZ)); c.stroke(); } for (let g = Math.ceil(B.minZ / 10) * 10; g <= B.maxZ; g += 10) { c.beginPath(); c.moveTo(X(B.minX), Z(g)); c.lineTo(X(B.maxX), Z(g)); c.stroke(); }
+    const pal = ['#f4a6b8', '#ffd18a', '#a8d8f0', '#c3b4f0', '#ffb98a'];
+    let n = 0; for (const b of (map.colliders || [])) { if (b.max.y - b.min.y < 0.8) continue; const w = (b.max.x - b.min.x) * sc, d = (b.max.z - b.min.z) * sc; if (w < 1.5 && d < 1.5) continue; c.fillStyle = pal[(n++) % pal.length]; c.fillRect(X(b.min.x), Z(b.min.z), w, d); c.strokeStyle = 'rgba(40,40,80,.55)'; c.lineWidth = 1.2; c.strokeRect(X(b.min.x), Z(b.min.z), w, d); }
+    c.font = '700 13px Fredoka,system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const arr = (v) => Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.entries(v).map(([k, o]) => (o && o.name === undefined ? { name: k, ...o } : o)) : []);
+    for (const s of arr(map.bombsites)) { const p = s.position || s.center || s; const x = p.x, z = p.z !== undefined ? p.z : p.y; if (x === undefined) continue; c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(X(x), Z(z), 16, 0, 6.283); c.fill(); c.fillStyle = '#333'; c.font = '800 18px Fredoka,system-ui'; c.fillText(String(s.name || s.id || '?').slice(0, 1).toUpperCase(), X(x), Z(z) + 1); }
+    c.font = '700 11px Fredoka,system-ui'; for (const co of arr(map.callouts)) { const p = co.position || co; if (p.x === undefined) continue; c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.9)'; c.strokeText(co.name, X(p.x), Z(p.z)); c.fillStyle = '#2a3560'; c.fillText(co.name, X(p.x), Z(p.z)); }
+    // player
+    c.save(); c.translate(X(st.position.x), Z(st.position.z)); c.rotate(-st.yaw); c.fillStyle = '#2ee6a0'; c.strokeStyle = '#0b3'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 8); c.lineTo(0, 4); c.lineTo(-8, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
+    c.fillStyle = '#1a7f55'; c.font = '800 11px Fredoka,system-ui'; c.fillText('YOU', X(st.position.x), Z(st.position.z) + 20);
+    // footprint preview
+    const pr = 0.5 + 0.5 * Math.sin(T.t * 6);
+    if (T.id === 'missile') { c.strokeStyle = '#ff3b5c'; c.fillStyle = 'rgba(255,59,92,.18)'; c.lineWidth = 3; c.beginPath(); c.arc(X(T.x), Z(T.z), cfg.missile.blastRadius * sc, 0, 6.283); c.fill(); c.stroke(); }
+    else { const a = cfg.airstrike; let fx = T.x - st.position.x, fz = T.z - st.position.z; const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l; for (let i = 0; i < a.bombs; i++) { const off = (i - (a.bombs - 1) / 2) * a.spacing; c.strokeStyle = '#ff3b5c'; c.fillStyle = 'rgba(255,59,92,.18)'; c.lineWidth = 2.5; c.beginPath(); c.arc(X(T.x + fx * off), Z(T.z + fz * off), a.blastRadius * sc, 0, 6.283); c.fill(); c.stroke(); } }
+    const cx = X(T.x), cz = Z(T.z); c.strokeStyle = '#ff3b5c'; c.lineWidth = 3; c.beginPath(); c.arc(cx, cz, 9 + pr * 3, 0, 6.283); c.moveTo(cx - 20, cz); c.lineTo(cx - 6, cz); c.moveTo(cx + 6, cz); c.lineTo(cx + 20, cz); c.moveTo(cx, cz - 20); c.lineTo(cx, cz - 6); c.moveTo(cx, cz + 6); c.lineTo(cx, cz + 20); c.stroke();
+  }
+
   // ---------- API ----------
   function call(id) {
-    if (!S.enabled || (S.active || S.finish) && id !== 'uav') return false;
+    if (!S.enabled || (S.active || S.finish || S.tablet) && id !== 'uav') return false;
     if (id === 'uav' && S.uav) return false;
     if (!(S.inv[id] > 0)) return false;
     S.inv[id]--; look.dx = look.dy = 0;
     if (id === 'uav') { startUav(); emit('called', { id }); showBanner('UAV active', `Enemies revealed for ${cfg.uav.duration} s`, 1.8); }
-    else if (id === 'missile') startMissile(); else if (id === 'rc') startRc(); else if (id === 'airstrike') startAirstrike();
+    else if (id === 'missile' || id === 'airstrike') openTablet(id); else if (id === 'rc') startRc();
     else return false;
     refreshHud(); return true;
   }
   function cancel(reason = 'cancel') {
+    if (S.tablet) { closeTablet(reason === 'cancel'); }
+    for (const d of S.missiles) scene.remove(d.m); S.missiles.length = 0;
     if (S.active) { const k = S.active.id; if (S.active.mesh) scene.remove(S.active.mesh); if (S.active.ring) scene.remove(S.active.ring); endControl(k, reason); }
     if (S.finish) { S.finish = null; S.cam = null; endControl(S.finishKind || 'unknown', reason); }
     stopUav(reason);
@@ -400,7 +479,8 @@ export function createStreaks(ctx) {
     if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) banner.classList.remove('on'); }
     for (let i = S.fx.length - 1; i >= 0; i--) { const f = S.fx[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.fn(k, dt); if (k >= 1) { scene.remove(f.obj); S.fx.splice(i, 1); } }
     if (S.uav) updateUav(dt);
-    updateStrikes(dt);
+    updateStrikes(dt); updateMissiles(dt);
+    if (S.tablet) { drawTablet(dt); if (S.tablet && S.tablet.closing) { S.tablet.closing -= dt; if (S.tablet.closing <= 0) { const p = S.tablet.pick; closeTablet(false); launchPick(p); } } }
     if (S.active) {
       ctrl.setEnabled(false); S.finishKind = S.active.id;
       if (S.active.id === 'missile') updateMissile(dt); else if (S.active.id === 'rc') updateRc(dt);
@@ -416,12 +496,13 @@ export function createStreaks(ctx) {
     if (ctx.isPlaying && !ctx.isPlaying()) return;
     if (e.type === 'keyup') { keys.delete(e.code); return; }
     if (e.repeat) return; keys.add(e.code);
+    if (S.tablet) { if (e.code === 'Escape' || e.code === 'KeyQ') { if (!S.tablet.closing) closeTablet(true); e.preventDefault(); } else if (e.code === 'Space' || e.code === 'Enter') confirmTablet(); return; }
     if (S.active) { if (['Space', 'KeyE', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) e.preventDefault(); return; }
     for (const r of cfg.rewards) if (e.code === r.key) call(r.id);
     if (e.code === cfg.callKey) { const r = cfg.rewards.find((q) => S.inv[q.id] > 0 && !(q.id === 'uav' && S.uav)); if (r) call(r.id); }
   };
-  const onMove = (e) => { if (S.active) { look.dx += e.movementX || 0; look.dy += e.movementY || 0; } };
-  const onDown = (e) => { if (e.button === 0) mouseDown.l = true; };
+  const onMove = (e) => { if (S.active || S.tablet) { look.dx += e.movementX || 0; look.dy += e.movementY || 0; } };
+  const onDown = (e) => { if (e.button === 0) { mouseDown.l = true; if (S.tablet) { confirmTablet(); e.stopPropagation(); } } };
   const onUp = (e) => { if (e.button === 0) mouseDown.l = false; };
   document.addEventListener('keydown', onKey, true); document.addEventListener('keyup', onKey, true); document.addEventListener('mousemove', onMove);
   document.addEventListener('mousedown', onDown, true); document.addEventListener('mouseup', onUp, true);
@@ -429,7 +510,7 @@ export function createStreaks(ctx) {
 
   refreshHud();
   Object.defineProperties(S, {
-    controlling: { get: () => !!(S.active || S.finish) },
+    controlling: { get: () => !!(S.active || S.finish || S.tablet) },
     cameraOverride: { get: () => !!(S.active || S.finish) },
     activeKind: { get: () => S.active ? S.active.id : S.finish ? S.finish.kind : null },
     uavActive: { get: () => !!S.uav },
