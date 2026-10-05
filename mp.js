@@ -3,6 +3,9 @@ import { NetClient } from './net.js';
 import { createController } from './movement.js';
 import { createCharacter, CHARACTER_IDS } from './characters.js';
 import { WEAPON_ORDER } from './player.js';
+import { play, setListener, initAudio } from './audio.js';
+const SHOT = ['shot_pistol', 'shot_mg', 'shot_sniper'];
+const P3 = (a) => (a && a.length === 3 ? { x: a[0], y: a[1], z: a[2] } : undefined);
 
 const HOST = 'sniper-chill-mp.onrender.com';
 const TH = (/[?&]mphost=([\w.:-]+)/.exec(location.search) || [])[1];
@@ -52,7 +55,7 @@ export function createMultiplayer(game, THREE) {
   if (!document.getElementById('mp-css')) { const s = document.createElement('style'); s.id = 'mp-css'; s.textContent = CSS; document.head.appendChild(s); }
   const root = game.root;
   const mp = { active: false, net: null };
-  const bodies = new Map(); let screen = null, hud = null, remotes = new Map(), keys = {}, locked = false, wakeTimer = null, wakeStop = false, mode = '1v1', binds = [], lastMsg = '', msgT = 0;
+  const bodies = new Map(); let bombBeepT = 0; let screen = null, hud = null, remotes = new Map(), keys = {}, locked = false, wakeTimer = null, wakeStop = false, mode = '1v1', binds = [], lastMsg = '', msgT = 0;
   const getName = () => { try { return localStorage.getItem('sc_name') || ''; } catch (e) { return ''; } };
   const setName = (n) => { try { localStorage.setItem('sc_name', n); } catch (e) {} };
   const clear = () => { if (screen) { screen.remove(); screen = null; } };
@@ -115,7 +118,11 @@ export function createMultiplayer(game, THREE) {
     net.on('kill', (m) => { if (!m) return; if (m.by === net.id) banner('You got a kill', 1.2); else if (m.id === net.id) banner(m.rv ? 'You were killed. A teammate can revive you for ' + m.rv + 's' : 'You were killed', 2.5);
       if (m.rv) bodies.set(m.id, { x: m.x, y: m.y, z: m.z, t: performance.now() / 1000, rv: m.rv }); });
     net.on('revive', (m) => { if (!m) return; bodies.delete(m.id); banner(m.id === net.id ? 'You were revived' : 'Teammate revived', 1.6); });
-    net.on('round_start', () => bodies.clear());
+    net.on('round_start', () => { bodies.clear(); play('round_start'); });
+    net.on('shot', (m) => { if (!m) return; const nm = SHOT[m.w] || 'shot_mg'; if (m.id === net.id) play(nm); else play(nm, P3(m.o)); });
+    net.on('hit', (m) => { if (!m) return; if (m.id === net.id) play('hurt'); else if (m.by === net.id) play(m.head ? 'headshot' : 'hit'); if (m.kill && m.by === net.id) play('kill'); });
+    net.on('planted', () => play('bomb_plant')); net.on('defused', () => play('bomb_defuse')); net.on('explode', () => play('bomb_explode'));
+    net.on('round_end', (m) => { try { play(m && m.winner === net.team ? 'round_win' : 'round_lose'); } catch (e) {} });
     net.connect();
   }
 
@@ -164,6 +171,7 @@ export function createMultiplayer(game, THREE) {
     game.plantT = busy ? 1 : 0; try { game.plantAnimTick(dt); } catch (er) {}
     const e = net.eye(), cam = game.camera;
     cam.position.set(e.x, e.y, e.z); cam.rotation.order = 'YXZ'; cam.rotation.set(e.pitch, e.yaw, 0);
+    try { setListener({ x: e.x, y: e.y, z: e.z }, { x: -Math.sin(e.yaw) * Math.cos(e.pitch), y: Math.sin(e.pitch), z: -Math.cos(e.yaw) * Math.cos(e.pitch) }); } catch (er) {}
     const want = new Set(); const rem = net.remotes(); let spec = null;
     if (!net.alive && net.phase !== 'waiting') spec = rem.find((r) => r.team === net.team && r.alive && r.connected !== false) || null;
     if (spec) { cam.position.set(spec.x, spec.y + (spec.crouched ? 1.1 : 1.6), spec.z); cam.rotation.set(spec.pitch, spec.yaw, 0); }
@@ -173,10 +181,12 @@ export function createMultiplayer(game, THREE) {
       r.ch.group.visible = (p.alive || fresh) && p.connected !== false && p !== spec; r.ch.group.rotation.z = fresh ? Math.PI / 2 : 0; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
       const sp = dt > 0 ? Math.hypot(p.x - r.lx, p.z - r.lz) / dt : 0; r.lx = p.x; r.lz = p.z; r.sp = (r.sp || 0) + (sp - (r.sp || 0)) * 0.3;
       try { r.ch.update(dt, { speed: r.sp, aiming: false, pitch: p.pitch, reloading: false, weapon: WEAPON_ORDER[p.weapon], alive: p.alive }); } catch (er) {}
+      if (p.alive && r.sp > 3 && (r.stepT = (r.stepT || 0) - dt) <= 0) { r.stepT = 0.36; play('footstep', { x: p.x, y: p.y, z: p.z }); }
       v3.set(p.x, p.y + 2.1, p.z).project(cam); const vis = r.ch.group.visible && v3.z < 1;
       r.tag.style.display = vis ? '' : 'none'; if (vis) { r.tag.style.left = ((v3.x + 1) / 2 * 100) + '%'; r.tag.style.top = ((1 - v3.y) / 2 * 100) + '%'; r.tag.style.color = p.team === net.team ? '#7fe3ff' : '#ffb347'; }
     }
     if (net.alive && bodies.size) { const nowS = performance.now() / 1000; let best = null, bdist = 2.4; for (const [id, b] of bodies) { if (nowS - b.t > b.rv) { bodies.delete(id); continue; } const rp = rem.find((r) => r.id === id); if (!rp || rp.team !== net.team) continue; const d = Math.hypot(e.x - b.x, e.z - b.z); if (d < bdist) { bdist = d; best = rp; } } if (best) banner('Hold E to revive ' + (best.name || 'teammate'), 0.2); }
+    if (net.bomb && net.bomb.t != null && net.phase === 'planted') { bombBeepT -= dt; if (bombBeepT <= 0) { const left = Math.max(0, net.bomb.t); bombBeepT = left < 5 ? 0.25 : left < 10 ? 0.5 : left < 20 ? 0.8 : 1.1; play('bomb_beep', typeof net.bomb.x === 'number' ? { x: net.bomb.x, y: net.bomb.y || 0, z: net.bomb.z } : undefined); } }
     for (const [id, r] of remotes) if (!want.has(id)) { game.scene.remove(r.ch.group); r.tag.remove(); remotes.delete(id); }
     // viewmodel
     try { const wi = WEAPON_ORDER[net.me.weapon]; if (wi && game.vm.current !== wi) game.vm.setWeapon(wi); game.vm.group.visible = net.alive && !(game.handBomb && game.handBomb.hid); game.vm.update(dt, { speed: e.speed, grounded: e.grounded, crouched: e.crouched, aiming: net.input.aim }); } catch (er) {}
