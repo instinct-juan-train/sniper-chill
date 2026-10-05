@@ -433,6 +433,7 @@ export class Game {
     if (!cont && !this._tutDone) { let seen = false; try { seen = !!localStorage.getItem('sc_tut'); } catch (e) {} if (!seen) { this._tutDone = true; this.tutorial(() => this.start(mode, cont)); return; } }
     if (!cont) play('ui_start');
     const newMatch = !cont || !this.eco || this.match.over;
+    if (newMatch || !this.botEco) this.botEco = Array.from({ length: 5 }, () => ({ money: 800, primary: null, loss: 0 }));
     if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
     this.grenades.clearRound();
     if (cont && this.match.round < 5) this.match.round++;
@@ -444,13 +445,33 @@ export class Game {
     this.rng = mulberry(Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')));
     if (mode === 'bomb') {
       const ct = this.map.spawnPoints.filter((s) => s.team === 'CT');
-      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff }));
+      ct.slice(0, 5).forEach((s, i) => { const w = this.botBuy(i); this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff, weapons: w.weapons, weapon: w.weapon, slot: i }); });
     }
     this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play'; this.renderSB();
     this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
+  botBuy(i) {
+    const e = this.botEco[i], P = { sniper: 3500, machinegun: 1800 };
+    if (!e.primary) { const r = this.rng ? this.rng() : Math.random(); const want = e.money >= 3500 && r < 0.5 ? 'sniper' : e.money >= 1800 ? 'machinegun' : null; if (want) { e.money -= P[want]; e.primary = want; } }
+    // save-round behaviour: a bot that cannot afford a gun next round stays on the pistol
+    return { weapons: e.primary ? [e.primary, 'pistol'] : ['pistol'], weapon: e.primary || 'pistol' };
+  }
+  botKillReward() {
+    let best = null, bd = 1e9; const P = this.ctrl.state.position;
+    for (const b of this.bots.list) { if (!b.alive || b.slot == null) continue; const d = Math.hypot(b.position.x - P.x, b.position.z - P.z); if (d < bd) { bd = d; best = b; } }
+    if (best) this.botEco[best.slot].money = Math.min(16000, this.botEco[best.slot].money + 300);
+  }
+  botSettle(win) {
+    if (!this.botEco) return; const R = { win: 3250, loss: 1400, step: 500, max: 3400 };
+    for (let i = 0; i < this.botEco.length; i++) {
+      const e = this.botEco[i], b = this.bots.list.find((x) => x.slot === i);
+      if (b && !b.alive) e.primary = null; // a dead bot loses its gun
+      if (!win) { e.loss = Math.max(0, e.loss - 1); e.money += R.win; } else { e.money += Math.min(R.max, R.loss + e.loss * R.step); e.loss++; }
+      e.money = Math.min(16000, e.money);
+    }
+  }
   end(win, msg) {
-    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; play(win ? 'round_win' : 'round_lose'); if (win) this.match.p++; else this.match.b++; this.renderSB(); try { recordRound(this, win); } catch (e) {} this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; play(win ? 'round_win' : 'round_lose'); if (win) this.match.p++; else this.match.b++; this.renderSB(); try { recordRound(this, win); } catch (e) {} try { this.botSettle(win); } catch (e) {} this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
@@ -579,7 +600,7 @@ export class Game {
     for (const e of events) {
       if (e.type === 'shot') {
         play('bot_shot', e.from); this.anim.onBotShot(e.hit ? e : { ...e, to: e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)) });
-        if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.startDeathCam(e.from, 'You were eliminated.'); } }
+        if (e.hit && this.player.alive) { const hh = this.eco.damage(e.damage, { zone: 'body' }); this.player.damage(hh.healthDamage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.botKillReward(); this.syncAmmoToEco(); this.eco.onDeath({ position: { x: st.position.x, y: st.position.y, z: st.position.z } }); this.streaks.registerDeath(); this.killfx.playerDied(); this.hud.setHealth(0); this.startDeathCam(e.from, 'You were eliminated.'); } }
       } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'The bomb was defused.'); }
     }
     this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: [] });

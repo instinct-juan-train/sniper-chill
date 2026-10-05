@@ -217,7 +217,7 @@ export function resetBot(bot, sp = {}) {
   if (sp.yaw != null) bot.yaw = sp.yaw;
   bot.hp = bot.maxHp; bot.alive = true; bot.pitch = 0;
   bot.ammo = {}; for (const w of bot.weapons) bot.ammo[w] = WEAPONS[w].mag;
-  bot.weapon = bot.weapons.includes('machinegun') ? 'machinegun' : bot.weapons[0];
+  bot.weapon = bot.weapons.includes('sniper') ? 'sniper' : bot.weapons.includes('machinegun') ? 'machinegun' : bot.weapons[0];
   bot.cooldown = 0; bot.reloadT = 0; bot.switchT = 0; bot.lastSwitch = -9; bot.scopeT = 0; bot.scoped = false; bot.reloading = false;
   bot.state = 'idle'; bot.path = null; bot.pi = 0; bot.pathGoal = null; bot.repathT = 0;
   bot.speed = 0; bot.moving = false; bot.vx = 0; bot.vz = 0;

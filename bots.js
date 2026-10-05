@@ -86,8 +86,8 @@ export function createBots(THREE, scene, map, opts) {
       shootT: 1 + Math.random(), yaw: 0, flash: 0, deadT: 0, defuseT: 0, speedMul: 0.85 + Math.random() * 0.3,
     };
     if (useAI && o.pro) {
-      const ai = AI.createBot({ id: b.id, team: 'CT', difficulty: o.difficulty || 'hard', x: pos.x, y: pos.y, z: pos.z, yaw: Math.random() * 6.28 });
-      Object.assign(ai, { group, bodyMat, baseColor: col, bar, ch, height: ch.height || 1.8, flash: 0, deadT: 0, pro: true, defuser: !!o.defuser });
+      const ai = AI.createBot({ id: b.id, team: 'CT', difficulty: o.difficulty || 'hard', weapons: o.weapons, x: pos.x, y: pos.y, z: pos.z, yaw: Math.random() * 6.28 });
+      Object.assign(ai, { slot: o.slot, group, bodyMat, baseColor: col, bar, ch, height: ch.height || 1.8, flash: 0, deadT: 0, pro: true, defuser: !!o.defuser });
       ai.position = ai;
       Object.defineProperty(ai, 'health', { get() { return ai.hp; } });
       if (!aiList.length) AI.newRound(aiWorld);
