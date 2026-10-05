@@ -170,30 +170,51 @@ export class Game {
       if (this.state !== 'play') return;
       if (e.code === 'Escape') { if (this.setOv.style.display !== 'none') { this.closeSettings(); return; } this.pause(); return; }
       if (this.eco && this.eco.getState().menuOpen) return;
-      if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary'); else if (e.code === 'Digit3' && !e.repeat) this.toggleKnife();
+      if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary'); else if (e.code === 'Digit3' && !e.repeat) this.toggleKnife(); else if (e.code === 'KeyF' && !e.repeat) this.inspect();
       if (!e.repeat && ['KeyV', 'KeyH', 'KeyJ'].includes(e.code)) { this.throwGrenade({ KeyV: 'frag', KeyH: 'smoke', KeyJ: 'flash' }[e.code]); return; }
       else if (e.code === 'KeyR') { if (!this.knifeOn) this.ws.reload(); } else if (e.code === 'KeyE') { this.eDown = true; if (!e.repeat) this.tryPickup(); }
     });
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
   }
   makeKnife() {
-    const k = new THREE.Group(), mat = (c) => new THREE.MeshToonMaterial({ color: c }); this.kn = {};
-    const bx = (name, w, h, d, c, x, y, z, rz = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y, z); m.rotation.z = rz; k.add(m); this.kn[name] = m; return m; };
-    bx('blade', 0.022, 0.07, 0.24, 0xe8f4ff, 0, 0.012, -0.2); bx('tip', 0.02, 0.05, 0.08, 0xe8f4ff, 0, 0.0, -0.36); this.kn.tip.rotation.x = 0.35; bx('spine', 0.026, 0.012, 0.3, 0xffffff, 0, 0.05, -0.22);
-    bx('guard', 0.07, 0.02, 0.025, 0xffb347, 0, -0.02, -0.04); bx('kite', 0.06, 0.06, 0.012, 0xffb347, 0, -0.02, -0.07, Math.PI / 4);
-    bx('handle', 0.035, 0.04, 0.13, 0xff7a3c, 0, -0.03, 0.03);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 6, 14), mat(0xffb347)); ring.position.set(0, -0.03, 0.11); k.add(ring); this.kn.ring = ring;
-    bx('hand', 0.055, 0.05, 0.08, 0xf2c9a0, 0, -0.03, 0.02); bx('sleeve', 0.06, 0.05, 0.14, 0x2a6fd6, 0.0, -0.03, 0.14);
-    k.visible = false; k.userData.home = new THREE.Vector3(0.2, -0.2, -0.36); k.position.copy(k.userData.home); k.rotation.set(0.1, 0.15, 0);
-    this.camera.add(k); this.knife = k; this.knSkin = false;
+    const k = new THREE.Group(), mat = (c) => new THREE.MeshToonMaterial({ color: c }); this.kn = {}; const S = 1.5;
+    const add = (name, m, x, y, z) => { m.position.set(x, y, z); k.add(m); if (name) this.kn[name] = m; return m; };
+    const outline = (m, s = 1.08) => { const o = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ color: 0x2a2140, side: THREE.BackSide })); o.scale.setScalar(s); m.add(o); };
+    // curved karambit blade: side profile extruded thin, bevelled
+    const sh = new THREE.Shape(); const P = (u, v) => [u * S, v * S];
+    sh.moveTo(...P(0, 0.018)); sh.quadraticCurveTo(...P(0.06, 0.042), ...P(0.115, 0.012)); sh.quadraticCurveTo(...P(0.15, -0.012), ...P(0.158, -0.082));
+    sh.quadraticCurveTo(...P(0.112, -0.03), ...P(0.07, -0.012)); sh.quadraticCurveTo(...P(0.035, 0.0), ...P(0, -0.014)); sh.closePath();
+    const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2, curveSegments: 14 }); bg.translate(0, 0, -0.003);
+    const blade = new THREE.Mesh(bg, mat(0xe8f4ff)); blade.rotation.y = Math.PI / 2; add('blade', blade, 0, 0, -0.04); outline(blade, 1.07);
+    // spine ridge (thicker contour along the top edge) + bevel highlight along the edge
+    const sp = new THREE.Shape(); sp.moveTo(...P(0, 0.018)); sp.quadraticCurveTo(...P(0.06, 0.042), ...P(0.115, 0.012)); sp.quadraticCurveTo(...P(0.15, -0.012), ...P(0.158, -0.082));
+    sp.quadraticCurveTo(...P(0.152, -0.05), ...P(0.12, 0.0)); sp.quadraticCurveTo(...P(0.06, 0.03), ...P(0, 0.006)); sp.closePath();
+    const sg = new THREE.ExtrudeGeometry(sp, { depth: 0.011, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 1, curveSegments: 14 }); sg.translate(0, 0, -0.0055);
+    const spine = new THREE.Mesh(sg, mat(0xffffff)); spine.rotation.y = Math.PI / 2; add('spine', spine, 0, 0, -0.04);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.009, 8, 6), mat(0xffffff)); add('tip', tip, 0, -0.082 * S, -0.04 - 0.158 * S);
+    // handle: tapered cylinder along z with wrap rings
+    const hg = new THREE.CylinderGeometry(0.019, 0.024, 0.15, 14); hg.rotateX(Math.PI / 2);
+    const handle = new THREE.Mesh(hg, mat(0xff7a3c)); add('handle', handle, 0, -0.004, 0.035); outline(handle, 1.12);
+    this.kn.wraps = []; for (let i = 0; i < 7; i++) { const w = new THREE.Mesh(new THREE.TorusGeometry(0.0225 + i * 0.0005, 0.0042, 6, 16), mat(0xffd9a8)); w.position.set(0, -0.004, -0.03 + i * 0.0205); w.userData.z = w.position.z; k.add(w); this.kn.wraps.push(w); }
+    const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.009, 16), mat(0xffb347)); guard.rotation.x = Math.PI / 2; add('guard', guard, 0, -0.004, -0.045); outline(guard, 1.1);
+    const pom = new THREE.Mesh(new THREE.SphereGeometry(0.03, 14, 10), mat(0xffb347)); add('kite', pom, 0, -0.004, 0.118); outline(pom, 1.1);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.0085, 8, 20), mat(0xffb347)); ring.position.set(0, -0.045, 0.125); ring.rotation.y = Math.PI / 2; k.add(ring); this.kn.ring = ring; outline(ring, 1.12);
+    // hand: palm + four fingers wrapped over the handle + thumb
+    const skin = 0xf2c9a0; const palm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.06), mat(skin)); add('hand', palm, 0.005, -0.012, 0.075); outline(palm, 1.1);
+    for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.0095, 0.03, 4, 8), mat(skin)); f.rotation.z = Math.PI / 2; add(null, f, -0.02, 0.012, 0.012 + i * 0.0165); }
+    const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.0105, 0.04, 4, 8), mat(skin)); th.rotation.x = Math.PI / 2; th.rotation.z = 0.2; add(null, th, 0.03, 0.02, 0.01);
+    const sl = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.042, 0.2, 12), mat(0x2a6fd6)); sl.rotation.x = Math.PI / 2 - 0.15; add('sleeve', sl, 0.01, -0.02, 0.2); outline(sl, 1.06);
+    k.visible = false; k.userData.home = new THREE.Vector3(0.15, -0.13, -0.5); k.position.copy(k.userData.home); k.rotation.set(0.6, 0.3, -0.2);
+    this.camera.add(k); this.knife = k; this.knSkin = false; this.inspectT = -1;
   }
   applyKnifeSkin(on) {
     if (on === this.knSkin) return; this.knSkin = on; const K = this.kn, c = (m, h) => m.material.color.set(h);
-    if (on) { c(K.blade, 0xff9ac8); c(K.tip, 0x9ad1ff); c(K.spine, 0xffffff); c(K.guard, 0xffd166); c(K.kite, 0x7dffb0); c(K.handle, 0x8f5cff); c(K.ring, 0xffd166); K.blade.scale.set(1.15, 1, 1); }
-    else { c(K.blade, 0xe8f4ff); c(K.tip, 0xe8f4ff); c(K.spine, 0xffffff); c(K.guard, 0xffb347); c(K.kite, 0xffb347); c(K.handle, 0xff7a3c); c(K.ring, 0xffb347); K.blade.scale.set(1, 1, 1); }
+    if (on) { c(K.blade, 0xff9ac8); c(K.tip, 0x9ad1ff); c(K.spine, 0xffffff); c(K.guard, 0xffd166); c(K.kite, 0x7dffb0); c(K.handle, 0x8f5cff); c(K.ring, 0xffd166); K.wraps.forEach((w) => c(w, 0xd9c2ff)); c(K.handle, 0x8f5cff); }
+    else { c(K.blade, 0xe8f4ff); c(K.tip, 0xe8f4ff); c(K.spine, 0xffffff); c(K.guard, 0xffb347); c(K.kite, 0xffb347); c(K.handle, 0xff7a3c); c(K.ring, 0xffb347); K.wraps.forEach((w) => c(w, 0xffd9a8)); }
   }
   toggleKnife() { if (this.knifeOn) { const inv = this.eco.getState().inventory; this.pick('primary'); if (this.knifeOn) this.unKnife(); return; } this.ws.setTrigger(false); this.ws.setAim(false); this.knifeOn = true; this.vm.group.visible = false; this.knife.visible = true; this.slashT = -1; play('ui_click'); }
   unKnife() { if (!this.knifeOn) return; this.knifeOn = false; this.knife.visible = false; this.vm.group.visible = true; }
+  inspect() { if (this.knifeOn && this.slashT < 0 && this.inspectT < 0) this.inspectT = 0; }
   slash() {
     if (!this.player.alive || this.knifeCd > 0 || this.state !== 'play') return;
     const es = this.eco.getState(); if (es.menuOpen) return;
@@ -221,9 +242,13 @@ export class Game {
     if (this.knifeCd > 0) this.knifeCd -= dt;
     const k = this.knife; if (!k.visible) return; const h = k.userData.home; this.applyKnifeSkin(!!this.eco.getState().inventory.knifeskin);
     if (this.knSkin) { const hue = (performance.now() / 2500) % 1; this.kn.blade.material.color.setHSL(0.9 - 0.3 * Math.abs(Math.sin(hue * 6.28)), 0.8, 0.78); }
-    if (this.slashT >= 0) { this.slashT += dt; const t = Math.min(1, this.slashT / 0.3), e = Math.sin(t * Math.PI);
-      k.position.set(h.x - 0.38 * t + 0.1 * e, h.y + 0.1 * e - 0.05 * t, h.z - 0.12 * e); k.rotation.set(0.1 - 0.9 * e, 0.15 + 1.2 * t, -0.9 * e + 0.5 * t); if (t >= 1) this.slashT = -1; }
-    else { const b = Math.sin(performance.now() / 600) * 0.004; k.position.set(h.x, h.y + b, h.z); k.rotation.set(0.1, 0.15, 0); }
+    const R0 = [0.6, 0.3, -0.2];
+    if (this.slashT >= 0) { this.slashT += dt; const t = Math.min(1, this.slashT / 0.32), e = Math.sin(t * Math.PI), w = t < 0.35 ? t / 0.35 : 1 - (t - 0.35) / 0.65;
+      k.position.set(h.x - 0.34 * t + 0.08 * Math.sin(Math.min(1, t * 2) * Math.PI / 2) * (1 - t), h.y + 0.08 * e - 0.04 * t, h.z - 0.14 * e);
+      k.rotation.set(R0[0] - 0.9 * e, R0[1] + 1.0 * t - 0.4 * w, R0[2] - 1.1 * e); if (t >= 1) this.slashT = -1; }
+    else if (this.inspectT >= 0) { this.inspectT += dt; const t = Math.min(1, this.inspectT / 2.2), e = Math.sin(Math.min(1, t * 1.2) * Math.PI);
+      k.position.set(h.x - 0.14 * e, h.y + 0.1 * e, h.z + 0.08 * e); k.rotation.set(R0[0] + 0.3 * e, R0[1] - 0.6 * e, R0[2] + Math.PI * 2 * t - 0.5 * e); if (t >= 1) { this.inspectT = -1; } }
+    else { const b = Math.sin(performance.now() / 600) * 0.004; k.position.set(h.x, h.y + b, h.z); k.rotation.set(R0[0], R0[1], R0[2] + Math.sin(performance.now() / 900) * 0.02); }
   }
   renderInv() {
     const es = this.eco.getState(), inv = es.inventory, cur = this.knifeOn ? 'knife' : this.ws.current, gr = inv.grenades || {};
@@ -234,7 +259,7 @@ export class Game {
     h += inv.primary ? it('1', nm(inv.primary), '', cur === inv.primary) : it('1', 'Primary', 'empty', false, ' empty');
     h += it('2', nm(inv.secondary || 'pistol'), '', cur === (inv.secondary || 'pistol'));
     h += it('3', inv.knifeskin ? 'Kite Cutter' : 'Knife', '', cur === 'knife');
-    const gl = [['V', 'frag', 'Frag'], ['H', 'smoke', 'Humo'], ['J', 'flash', 'Flash']].filter(([, id]) => gr[id] > 0);
+    const gl = [['V', 'frag', 'Frag'], ['H', 'smoke', 'Smoke'], ['J', 'flash', 'Flash']].filter(([, id]) => gr[id] > 0);
     if (gl.length) { h += '<div class="sep"></div>'; for (const [k, id, lab] of gl) h += it(k, lab, '×' + gr[id], false, ' gr'); }
     this.invb.innerHTML = h;
   }
