@@ -71,6 +71,9 @@ export class Game {
     this.streaks.show(false);
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
+    this.hint = document.createElement('div'); this.hint.style.cssText = 'position:absolute;left:50%;bottom:30%;transform:translateX(-50%);z-index:21;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;pointer-events:none'; root.appendChild(this.hint);
+    this.sb = document.createElement('div'); this.sb.style.cssText = 'position:absolute;left:50%;top:6px;transform:translateX(-50%);z-index:30;display:none;gap:14px;align-items:center;background:rgba(16,27,32,.78);border:1px solid #9cd9b655;border-radius:14px;padding:6px 16px;font:800 15px system-ui;pointer-events:none;color:#fff'; root.appendChild(this.sb);
+    this.match = { p: 0, b: 0, round: 1, over: false };
     this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;right:6px;bottom:2px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
     this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
@@ -119,7 +122,7 @@ export class Game {
       if (e.code === 'Escape') { this.pause(); return; }
       if (this.eco && this.eco.getState().menuOpen) return;
       if (e.code === 'Digit1') this.pick('primary'); else if (e.code === 'Digit2') this.pick('secondary');
-      else if (e.code === 'KeyR') this.ws.reload(); else if (e.code === 'KeyE') this.eDown = true;
+      else if (e.code === 'KeyR') this.ws.reload(); else if (e.code === 'KeyE') { this.eDown = true; if (!e.repeat) this.tryPickup(); }
     });
     d.addEventListener('keyup', (e) => { if (e.code === 'KeyE') this.eDown = false; });
   }
@@ -146,6 +149,12 @@ export class Game {
     } else if (n === 'drop') { if (d.drop) this.addDrop(d.drop); else if (d.dropId) this.addDrop(d); }
     else if (n === 'reward' || n === 'money') { /* eco chip shows money */ }
   }
+  matchOver() { const m = this.match; if (m.p >= 3 || m.b >= 3 || m.p + m.b >= 5) { m.over = true; return true; } return false; }
+  renderSB() {
+    const m = this.match, dots = (w) => Array.from({ length: 3 }, (_, i) => `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 2px;background:${i < w ? '#ffd166' : 'rgba(255,255,255,.22)'}"></span>`).join('');
+    this.sb.style.display = this.state === 'menu' ? 'none' : 'flex';
+    this.sb.innerHTML = `<span>TÚ ${dots(m.p)}</span><b style="font-size:20px">${m.p} - ${m.b}</b><span>${dots(m.b)} BOTS</span><span style="opacity:.7">Ronda ${Math.min(5, m.round)}/5</span>`;
+  }
   setZone() {
     const sp = this.spawnT; this.zone = { x: sp.x, z: sp.z, y: sp.y, h: 2.5 };
     if (!this.zoneMesh) {
@@ -158,19 +167,26 @@ export class Game {
   }
   inBuyZone() { const p = this.ctrl.state.position, z = this.zone; return !!z && Math.abs(p.x - z.x) <= z.h && Math.abs(p.z - z.z) <= z.h && Math.abs(p.y - z.y) < 2; }
   addDrop(drop) {
-    const col = { pistol: 0x5ad1ff, machinegun: 0xffb347, sniper: 0x9affc4 }[drop.weapon] || 0xffffff;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.2), new THREE.MeshBasicMaterial({ color: col })); mesh.position.set(drop.position.x, (drop.position.y || 0) + 0.3, drop.position.z); this.scene.add(mesh);
-    (this.drops = this.drops || []).push({ drop, mesh, t: 0 });
+    const idx = { pistol: 0, machinegun: 1, sniper: 2 }[drop.weapon] ?? 0; let mesh;
+    const src = this.vm.group.children[idx];
+    if (src) { mesh = src.clone(true); mesh.visible = true; mesh.traverse((o) => { o.visible = o.userData && o.userData.isFlash ? false : true; }); mesh.position.set(0, 0, 0); mesh.rotation.set(0, 0, 0); mesh.scale.setScalar(1.7); }
+    else mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const holder = new THREE.Group(); holder.add(mesh); mesh.rotation.z = Math.PI / 2; mesh.position.y = 0.12;
+    const gh = this.map.getHeight(drop.position.x, drop.position.z); const gy = Number.isFinite(gh) ? Math.max(gh, (drop.position.y || 0) - 0.5) : (drop.position.y || 0);
+    holder.position.set(drop.position.x, gy + 0.03, drop.position.z); holder.rotation.y = Math.random() * 6.28; this.scene.add(holder);
+    (this.drops = this.drops || []).push({ drop, mesh: holder, t: 0 });
+  }
+  nearestDrop() { const p = this.ctrl.state.position; let best = null, bd = 1.6; for (const d of this.drops || []) { const dd = Math.hypot(p.x - d.mesh.position.x, p.z - d.mesh.position.z); if (dd < bd && Math.abs(p.y - d.mesh.position.y) < 2 && d.t > 0.6) { bd = dd; best = d; } } return best; }
+  tryPickup() {
+    const d = this.nearestDrop(); if (!d) return false;
+    this.syncAmmoToEco(); const r = this.eco.pickupDrop(d.drop); if (!r || r.ok === false) { this.kf.textContent = (r && r.reason) || 'No puedes recoger ahora'; this.kfT = 1.2; return false; }
+    this.scene.remove(d.mesh); this.drops.splice(this.drops.indexOf(d), 1);
+    if (d.drop.ammo && this.ws.ammo[d.drop.weapon]) { this.ws.ammo[d.drop.weapon].mag = d.drop.ammo.mag ?? this.ws.ammo[d.drop.weapon].mag; this.ws.ammo[d.drop.weapon].reserve = d.drop.ammo.reserve ?? this.ws.ammo[d.drop.weapon].reserve; }
+    this.owned.add(d.drop.weapon); this.kf.textContent = 'Arma recogida'; this.kfT = 1.2; return true;
   }
   updateDrops(dt) {
-    const p = this.ctrl.state.position;
-    for (let i = (this.drops || []).length - 1; i >= 0; i--) {
-      const d = this.drops[i]; d.t += dt; d.mesh.rotation.y += dt * 2; d.mesh.position.y += Math.sin(d.t * 3) * 0.002;
-      if (d.t > 0.8 && Math.hypot(p.x - d.mesh.position.x, p.z - d.mesh.position.z) < 1.1 && Math.abs(p.y - d.mesh.position.y) < 2) {
-        this.syncAmmoToEco(); const r = this.eco.pickupDrop(d.drop);
-        if (r && r.ok !== false) { this.scene.remove(d.mesh); this.drops.splice(i, 1); const inv = this.eco.getState().inventory; if (d.drop.ammo && this.ws.ammo[d.drop.weapon]) { this.ws.ammo[d.drop.weapon].mag = d.drop.ammo.mag ?? this.ws.ammo[d.drop.weapon].mag; this.ws.ammo[d.drop.weapon].reserve = d.drop.ammo.reserve ?? this.ws.ammo[d.drop.weapon].reserve; } this.owned.add(d.drop.weapon); this.kf.textContent = 'Arma recogida'; this.kfT = 1.2; }
-      }
-    }
+    for (const d of this.drops || []) d.t += dt;
+    const n = this.nearestDrop(); this.hint.textContent = n ? 'E · recoger ' + (WEAPON_STATS[n.drop.weapon] ? WEAPON_STATS[n.drop.weapon].name : n.drop.weapon) : '';
   }
   pick(slot) { const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
   overlay(html, btns) {
@@ -180,7 +196,7 @@ export class Game {
     this.ov.appendChild(row);
   }
   showMenu() {
-    this.state = 'menu'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
+    this.state = 'menu'; this.sb.style.display = 'none'; this.streaks.cancel('menu'); this.streaks.show(false); this.hud.root.style.display = 'none'; this.info.textContent = ''; this.kf.textContent = '';
     this.ctrl.setEnabled(false); this.ctrl.exitPointerLock();
     this.overlay(`<h2>Sniper Chill</h2><p>Tú contra 5 bots en una isla de azoteas. Planta la bomba en A (suelo) o B (azotea) manteniendo E y aguanta, o elimínalos a todos.</p>
 <p><b>WASD</b> moverte · <b>ratón</b> apuntar · <b>clic</b> disparar · <b>clic derecho</b> apuntar/mirilla · <b>1 2 3</b> armas · <b>R</b> recargar · <b>E</b> plantar · <b>espacio</b> saltar · <b>Shift</b> agacharte</p>
@@ -195,7 +211,8 @@ export class Game {
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode, cont = false) {
-    if (!cont || !this.eco) this.newEconomy();
+    if (!cont || !this.eco || this.match.over) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; }
+    if (cont && this.match.round < 5) this.match.round++;
     this.mode = mode; this.killfx.reset(); this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
@@ -205,18 +222,20 @@ export class Game {
       const ct = this.map.spawnPoints.filter((s) => s.team === 'CT');
       ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff === 'chill' ? (i < 2 ? 'medium' : 'easy') : this.diff }));
     }
-    this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play';
+    this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play'; this.renderSB();
     this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
   end(win, msg) {
-    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; if (win) this.match.p++; else this.match.b++; this.renderSB(); this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
       top.push(this.score); top.sort((a, b) => b - a); top = top.slice(0, 5); try { localStorage.setItem(key, JSON.stringify(top)); } catch (e) {}
       extra = `<p>Puntos: <b>${this.score}</b> · Bajas: ${this.kills} · Headshots: ${this.heads}</p><p>Tu top de hoy (solo en este dispositivo): ${top.join(' · ')}</p>`;
     }
-    this.overlay(`<h2>${win ? 'Ganas' : 'Pierdes'}</h2><p>${msg}</p>${extra}`, [['Siguiente ronda (conservas dinero)', () => this.start(this.mode, true)], ['Partida nueva', () => this.start(this.mode)], ['Menú', () => this.showMenu(), true]]);
+    const mo = this.matchOver(), m = this.match;
+    this.overlay(`<h2>${mo ? (m.p > m.b ? '¡Ganas la partida!' : 'Pierdes la partida') : (win ? 'Ganas la ronda' : 'Pierdes la ronda')}</h2><p>${msg}</p><p>Marcador: <b>TÚ ${m.p} - ${m.b} BOTS</b> (mejor de 5, gana el primero en 3)</p>${extra}`,
+      mo ? [['Partida nueva', () => this.start(this.mode)], ['Menú', () => this.showMenu(), true]] : [['Siguiente ronda (conservas dinero)', () => this.start(this.mode, true)], ['Menú', () => this.showMenu(), true]]);
   }
   tracer(a, b, color = 0xfff2a0, life = 0.07) {
     const g = new THREE.BufferGeometry().setFromPoints([a, b]); const m = new THREE.LineBasicMaterial({ color, transparent: true });
