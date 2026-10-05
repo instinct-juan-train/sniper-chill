@@ -52,7 +52,7 @@ export function createMultiplayer(game, THREE) {
   if (!document.getElementById('mp-css')) { const s = document.createElement('style'); s.id = 'mp-css'; s.textContent = CSS; document.head.appendChild(s); }
   const root = game.root;
   const mp = { active: false, net: null };
-  let screen = null, hud = null, remotes = new Map(), keys = {}, locked = false, wakeTimer = null, wakeStop = false, mode = '1v1', binds = [], lastMsg = '', msgT = 0;
+  const bodies = new Map(); let screen = null, hud = null, remotes = new Map(), keys = {}, locked = false, wakeTimer = null, wakeStop = false, mode = '1v1', binds = [], lastMsg = '', msgT = 0;
   const getName = () => { try { return localStorage.getItem('sc_name') || ''; } catch (e) { return ''; } };
   const setName = (n) => { try { localStorage.setItem('sc_name', n); } catch (e) {} };
   const clear = () => { if (screen) { screen.remove(); screen = null; } };
@@ -112,7 +112,10 @@ export function createMultiplayer(game, THREE) {
     net.on('planted', () => banner('Bomb planted', 2));
     net.on('defused', () => banner('Bomb defused', 2));
     net.on('explode', () => banner('Bomb exploded', 2));
-    net.on('kill', (m) => { if (m && m.killer === net.id) banner('You got a kill', 1.2); else if (m && m.victim === net.id) banner('You were killed', 2); });
+    net.on('kill', (m) => { if (!m) return; if (m.by === net.id) banner('You got a kill', 1.2); else if (m.id === net.id) banner(m.rv ? 'You were killed. A teammate can revive you for ' + m.rv + 's' : 'You were killed', 2.5);
+      if (m.rv) bodies.set(m.id, { x: m.x, y: m.y, z: m.z, t: performance.now() / 1000, rv: m.rv }); });
+    net.on('revive', (m) => { if (!m) return; bodies.delete(m.id); banner(m.id === net.id ? 'You were revived' : 'Teammate revived', 1.6); });
+    net.on('round_start', () => bodies.clear());
     net.connect();
   }
 
@@ -166,12 +169,14 @@ export function createMultiplayer(game, THREE) {
     if (spec) { cam.position.set(spec.x, spec.y + (spec.crouched ? 1.1 : 1.6), spec.z); cam.rotation.set(spec.pitch, spec.yaw, 0); }
     for (const p of rem) {
       want.add(p.id); const r = charFor(p);
-      r.ch.group.visible = p.alive && p.connected !== false && p !== spec; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
+      const bd = bodies.get(p.id), fresh = bd && !p.alive && (performance.now() / 1000 - bd.t) < bd.rv;
+      r.ch.group.visible = (p.alive || fresh) && p.connected !== false && p !== spec; r.ch.group.rotation.z = fresh ? Math.PI / 2 : 0; r.ch.group.position.set(p.x, p.y, p.z); r.ch.group.rotation.y = p.yaw;
       const sp = dt > 0 ? Math.hypot(p.x - r.lx, p.z - r.lz) / dt : 0; r.lx = p.x; r.lz = p.z; r.sp = (r.sp || 0) + (sp - (r.sp || 0)) * 0.3;
       try { r.ch.update(dt, { speed: r.sp, aiming: false, pitch: p.pitch, reloading: false, weapon: WEAPON_ORDER[p.weapon], alive: p.alive }); } catch (er) {}
       v3.set(p.x, p.y + 2.1, p.z).project(cam); const vis = r.ch.group.visible && v3.z < 1;
       r.tag.style.display = vis ? '' : 'none'; if (vis) { r.tag.style.left = ((v3.x + 1) / 2 * 100) + '%'; r.tag.style.top = ((1 - v3.y) / 2 * 100) + '%'; r.tag.style.color = p.team === net.team ? '#7fe3ff' : '#ffb347'; }
     }
+    if (net.alive && bodies.size) { const nowS = performance.now() / 1000; let best = null, bdist = 2.4; for (const [id, b] of bodies) { if (nowS - b.t > b.rv) { bodies.delete(id); continue; } const rp = rem.find((r) => r.id === id); if (!rp || rp.team !== net.team) continue; const d = Math.hypot(e.x - b.x, e.z - b.z); if (d < bdist) { bdist = d; best = rp; } } if (best) banner('Hold E to revive ' + (best.name || 'teammate'), 0.2); }
     for (const [id, r] of remotes) if (!want.has(id)) { game.scene.remove(r.ch.group); r.tag.remove(); remotes.delete(id); }
     // viewmodel
     try { const wi = WEAPON_ORDER[net.me.weapon]; if (wi && game.vm.current !== wi) game.vm.setWeapon(wi); game.vm.group.visible = net.alive && !(game.handBomb && game.handBomb.hid); game.vm.update(dt, { speed: e.speed, grounded: e.grounded, crouched: e.crouched, aiming: net.input.aim }); } catch (er) {}
