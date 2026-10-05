@@ -6,6 +6,9 @@ import { raycast } from './hitscan.js';
 import { createViewmodels, createWeaponSystem, createHUD, createPlayerState, applyDamage, WEAPON_ORDER } from './player.js';
 import { initAudio, play, setListener, startAmbient } from './audio.js';
 import { createBots } from './bots.js';
+import { createKillCam } from './killcam.js';
+import { applyLook } from './graphics.js';
+import { createAnimations } from './animations.js';
 
 const CSS = `
 .sg{font-family:system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;background:#9fdcff}
@@ -33,6 +36,7 @@ export class Game {
     this.scene.background = new THREE.Color(this.map.sky.background);
     this.scene.fog = new THREE.Fog(this.map.sky.fog.color, this.map.sky.fog.near, this.map.sky.fog.far);
     this.camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 400); this.scene.add(this.camera);
+    try { this.look = /[?&]look=off/.test(location.search) ? null : applyLook(THREE, this.renderer, this.scene, this.map); } catch (err) { console.error('look', err); this.look = null; }
 
     // physics world: map blocking boxes + roof slabs + ramps (from the map's floor/ramp data)
     const m = this.map; const phys = [...m.colliders];
@@ -51,9 +55,12 @@ export class Game {
     this.ws.onEvent = (n, d) => this.onWeaponEvent(n, d);
     this.player = createPlayerState();
     this.bots = createBots(THREE, this.scene, m, { raycast, colliders: this.world });
+    this.anim = createAnimations(THREE, { scene: this.scene, camera: this.camera, vm: this.vm, root: root, renderer: this.renderer, bots: this.bots }); this.anim.settings.slowmo = false; this.anim.settings.tracers = false;
     this.info = document.createElement('div'); this.info.className = 'info'; root.appendChild(this.info);
     this.kf = document.createElement('div'); this.kf.className = 'kf'; root.appendChild(this.kf);
+    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;right:10px;bottom:8px;z-index:200;font:700 12px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.textContent = '-- FPS · -- ms'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
+    this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
     this.fx = []; this.state = 'menu'; this.mode = 'bomb'; this.locked = false; this.wasLocked = false;
     this.ctrl.setEnabled(false);
     this.bomb = { planted: false, pos: new THREE.Vector3(), t: 0, site: '', defuseT: 0, beepT: 0 };
@@ -101,7 +108,7 @@ export class Game {
   }
   onWeaponEvent(n, d) {
     const map = { pistol: 'shot_pistol', machinegun: 'shot_mg', sniper: 'shot_sniper' };
-    if (n === 'shot') play(map[d.weapon]); else if (n === 'empty') play('empty'); else if (n === 'reload') play('reload'); else if (n === 'switch') play('ui_click');
+    if (n === 'shot') play(map[d.weapon]); else if (n === 'empty') { play('empty'); this.anim.onEmpty(); } else if (n === 'reload') { play('reload'); this.anim.onReload(); } else if (n === 'switch') { play('ui_click'); this.anim.onSwitch(); }
   }
   overlay(html, btns) {
     this.ov.style.display = 'flex'; this.ov.innerHTML = html;
@@ -124,7 +131,7 @@ export class Game {
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode) {
-    this.mode = mode; this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0);
+    this.mode = mode; this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0);
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
     this.score = 0; this.kills = 0; this.heads = 0; this.roundT = mode === 'bomb' ? 150 : 60; this.spawnTimer = 0.5; this.over = false; this.kf.textContent = '';
@@ -137,7 +144,7 @@ export class Game {
     this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
   end(win, msg) {
-    if (this.over) return; this.over = true; this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
@@ -159,11 +166,13 @@ export class Game {
       const dir = { x: -Math.sin(yaw) * cp, y: Math.sin(pit), z: -Math.cos(yaw) * cp };
       const hit = raycast(o, dir, { colliders: this.world, targets: this.bots.list, maxDistance: s.range });
       const end = hit ? hit.point : { x: o.x + dir.x * s.range, y: o.y + dir.y * s.range, z: o.z + dir.z * s.range };
-      this.tracer(muzzle.clone(), new THREE.Vector3(end.x, end.y, end.z), 0xfff2a0, s.weapon === 'sniper' ? 0.12 : 0.06);
+      this.anim.onShot({ weapon: s.weapon, end, hit });
+      let kh = hit ? (hit.kind === 'target' ? null : { kind: 'world', normal: hit.normal }) : null;
       if (hit && hit.kind === 'target') {
         const b = hit.target, zone = hit.zone === 'legs' ? 'limb' : hit.zone;
         const r = applyDamage(b.health, s.weapon, zone);
-        this.bots.damage(b, r.hp, r.headshot);
+        kh = { kind: 'target', bot: b, zone, headshot: r.headshot, killed: r.killed };
+        this.bots.damage(b, r.hp, r.headshot); this.anim.onBotHit(b, { dir, point: hit.point, headshot: r.headshot, killed: r.killed, damage: r.damage });
         this.hud.hitMarker(r.killed, r.headshot);
         play(r.killed ? 'kill' : r.headshot ? 'headshot' : 'hit');
         if (r.killed) {
@@ -171,6 +180,7 @@ export class Game {
           this.kf.textContent = r.headshot ? 'HEADSHOT +150' : 'Baja +100'; this.kfT = 1.5;
         }
       }
+      this.kc.shoot({ muzzle, end, weapon: s.weapon, hit: kh });
     }
   }
   update(dt) {
@@ -203,10 +213,11 @@ export class Game {
     });
     for (const e of events) {
       if (e.type === 'shot') {
-        play('bot_shot', e.from); this.tracer(e.from, e.hit ? e.to : e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)), 0xff8a8a, 0.07);
+        play('bot_shot', e.from); this.anim.onBotShot(e.hit ? e : { ...e, to: e.to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5), (Math.random() - 0.5) * 3)) });
         if (e.hit && this.player.alive) { this.player.damage(e.damage); this.hud.damageFlash(); play('hurt'); if (!this.player.alive) { this.hud.setHealth(0); this.end(false, 'Te han eliminado.'); } }
       } else if (e.type === 'defused') { play('bomb_defuse'); this.end(false, 'Desactivaron la bomba.'); }
     }
+    this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: this.bots.list });
     if (this.over) return;
     // timers / rules
     if (this.mode === 'bomb') {
@@ -235,15 +246,20 @@ export class Game {
   plant(site) {
     const s = this.map.bombsites[site], st = this.ctrl.state;
     this.bomb.planted = true; this.bomb.site = site; this.bomb.t = 40; this.bomb.defuseT = 0; this.bomb.beepT = 0;
-    this.bomb.pos.set(st.position.x, st.position.y, st.position.z); this.bombMesh.position.set(st.position.x, st.position.y + 0.13, st.position.z); this.bombMesh.visible = true; play('bomb_plant');
+    this.bomb.pos.set(st.position.x, st.position.y, st.position.z); this.bombMesh.position.set(st.position.x, st.position.y + 0.13, st.position.z); this.bombMesh.visible = true; play('bomb_plant'); this.anim.onBombPlant(this.bomb.pos);
   }
   loop(now) {
     if (!this.running) return; requestAnimationFrame(this.loop);
-    const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
+    { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')'; p.n = 0; p.t = 0; p.worst = 0; } }
+    const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
+    const dt = real * this.kc.update(real);
+    if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
     if (this.state === 'play') this.update(dt);
-    else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); }
-    this.renderer.render(this.scene, this.camera);
+    else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); this.anim.update(dt, { bots: this.bots.list }); }
+    this.kc.applyCamera();
+    if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
+    this.kc.afterRender();
   }
   destroy() { this.running = false; this.ro && this.ro.disconnect(); this.ctrl.dispose(); this.renderer.dispose(); }
 }
