@@ -13,6 +13,7 @@ import { createKillFX } from './killfx.js';
 import { getContext } from './audio.js';
 import { DIFFICULTY } from './botsai.js';
 import { createStreaks } from './streaks.js';
+import { addDecor } from './decor.js';
 import { createEconomy, WEAPON_STATS } from './economy.js';
 import { createDestruction } from './destruction.js';
 import { createGrenades } from './grenades.js';
@@ -71,7 +72,7 @@ export class Game {
     this.canvas = document.createElement('canvas'); this.canvas.className = 'main'; root.appendChild(this.canvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
     this.scene = new THREE.Scene();
-    this.map = buildMap(THREE); this.scene.add(this.map.group);
+    this.map = buildMap(THREE); this.scene.add(this.map.group); try { if (!/[?&]nodecor/.test(location.search)) addDecor(THREE, this.map, this.scene); } catch (e) { console.warn('decor failed', e); }
     this.scene.background = new THREE.Color(this.map.sky.background);
     this.scene.fog = new THREE.Fog(this.map.sky.fog.color, this.map.sky.fog.near, this.map.sky.fog.far);
     this.camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 400); this.scene.add(this.camera);

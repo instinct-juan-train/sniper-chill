@@ -95,7 +95,7 @@ export function createStreaks(ctx) {
   // ---------- DOM ----------
   if (!document.getElementById('sk-css')) { const s = document.createElement('style'); s.id = 'sk-css'; s.textContent = CSS; document.head.appendChild(s); }
   const dom = document.createElement('div'); dom.className = 'sk'; root.appendChild(dom);
-  dom.innerHTML = `<canvas class="mini" width="300" height="300"></canvas><div class="minilab"></div><div class="streak"></div><div class="tray"></div><div class="banner"><b></b><span></span></div><div class="tab"><div class="bz"><div class="hd"><b class="tt"></b><span>TACTICAL TABLET</span></div><canvas width="780" height="500"></canvas><div class="ft"></div><i class="th l"></i><i class="th r"></i></div></div>
+  dom.innerHTML = `<canvas class="mini" width="300" height="300"></canvas><div class="minilab"></div><div class="streak"></div><div class="tray"></div><div class="banner"><b></b><span></span></div><div class="tab"><div class="bz"><div class="hd"><b class="tt"></b><span>LIVE HELICOPTER FEED</span></div><canvas width="624" height="400"></canvas><div class="ft"></div><i class="th l"></i><i class="th r"></i></div></div>
   <div class="ctl"><div class="vig"></div><div class="scan"></div><div class="ret"><i></i></div><div class="rd top"></div><div class="bar"><i></i></div><div class="rd bot"></div></div>`;
   const $ = (s) => dom.querySelector(s);
   const mini = $('.mini'), minilab = $('.minilab'), streakEl = $('.streak'), tray = $('.tray'), banner = $('.banner'), ctl = $('.ctl'), rdTop = $('.rd.top'), rdBot = $('.rd.bot'), barI = $('.bar i');
@@ -390,26 +390,26 @@ export function createStreaks(ctx) {
   // ---------- tablet (airstrike / guided missile): 2D plan map, no live view ----------
   const tabEl = $('.tab'), tabCv = tabEl.querySelector('canvas'), tabTt = tabEl.querySelector('.tt'), tabFt = tabEl.querySelector('.ft');
 
-  const snapCv = document.createElement('canvas'); snapCv.width = 780; snapCv.height = 500; let snapOK = false;
-  function snapshot() {
-    snapOK = false; const R = ctx.renderer; if (!R) return;
-    try {
-      const W = 780, H = 500, B = map.bounds || { minX: -35, maxX: 35, minZ: -35, maxZ: 35 }, sc = Math.min((W - 24) / (B.maxX - B.minX), (H - 24) / (B.maxZ - B.minZ));
-      const cam = new THREE.OrthographicCamera(-W / 2 / sc, W / 2 / sc, H / 2 / sc, -H / 2 / sc, 1, 400); cam.position.set(0, 150, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
-      const rt = new THREE.WebGLRenderTarget(W, H); rt.texture.colorSpace = THREE.SRGBColorSpace;
-      const hid = []; for (const b of bots.list) { if (b.group && b.group.visible) { b.group.visible = false; hid.push(b.group); } }
-      const fog = scene.fog; scene.fog = null; const prev = R.getRenderTarget(); 
-      R.setRenderTarget(rt); R.render(scene, cam); const buf = new Uint8Array(W * H * 4); R.readRenderTargetPixels(rt, 0, 0, W, H, buf);
-      R.setRenderTarget(prev); scene.fog = fog; for (const g of hid) g.visible = true; rt.dispose();
-      const img = new ImageData(W, H); for (let y = 0; y < H; y++) { const s = (H - 1 - y) * W * 4; img.data.set(buf.subarray(s, s + W * 4), y * W * 4); }
-      snapCv.getContext('2d').putImageData(img, 0, 0); snapOK = true;
-    } catch (e) { console.warn('snapshot failed', e); snapOK = false; }
+  const CW = 624, CH = 400; let camRT = null, camImg = null, camBuf = null, camT = 0, camCam = null; const feed = document.createElement('canvas'); feed.width = CW; feed.height = CH;
+  function snapshot() { // set up the helicopter camera feed
+    if (!camRT) { camRT = new THREE.WebGLRenderTarget(CW, CH); camRT.texture.colorSpace = THREE.SRGBColorSpace; camBuf = new Uint8Array(CW * CH * 4); camImg = new ImageData(CW, CH); camCam = new THREE.PerspectiveCamera(52, CW / CH, 0.5, 600); }
+    camT = 1;
+  }
+  function renderFeed(T, st) {
+    const R = ctx.renderer; if (!R || !camRT) return;
+    camCam.position.set(T.x, 58, T.z + 24); camCam.lookAt(T.x, 0, T.z); camCam.updateMatrixWorld(true);
+    const hid = []; for (const b of bots.list) { if (b.group && b.group.visible) { b.group.visible = false; hid.push(b.group); } }
+    const fog = scene.fog; scene.fog = null; const prev = R.getRenderTarget(); const vmv = ctx.vm ? ctx.vm.group.visible : false; if (ctx.vm) ctx.vm.group.visible = false;
+    try { R.setRenderTarget(camRT); R.render(scene, camCam); R.readRenderTargetPixels(camRT, 0, 0, CW, CH, camBuf); } catch (e) { console.warn(e); }
+    R.setRenderTarget(prev); scene.fog = fog; for (const g of hid) g.visible = true; if (ctx.vm) ctx.vm.group.visible = vmv;
+    for (let y = 0; y < CH; y++) camImg.data.set(camBuf.subarray((CH - 1 - y) * CW * 4, (CH - y) * CW * 4), y * CW * 4);
+    feed.getContext('2d').putImageData(camImg, 0, 0);
   }
   function openTablet(id) {
     const st = ctrl.state; S.tablet = { id, x: st.position.x - Math.sin(st.yaw) * 14, z: st.position.z - Math.cos(st.yaw) * 14, t: 0, closing: 0, picked: null };
     ctrl.setEnabled(false); if (ctx.vm) ctx.vm.group.visible = false; look.dx = look.dy = 0;
     tabTt.textContent = id === 'missile' ? 'GUIDED MISSILE' : 'AIRSTRIKE';
-    tabFt.textContent = 'Move the mouse to aim · Click to call it in · Esc or Q to put the tablet away';
+    tabFt.textContent = 'Mouse: pan camera · Click: call it in · Esc/Q: put away';
     snapshot(); tabEl.classList.add('on'); play('ui_click'); emit('takeover', { active: true, kind: 'tablet' });
   }
   function closeTablet(refund) {
@@ -475,26 +475,28 @@ export function createStreaks(ctx) {
   }
   function drawTablet(dt) {
     const T = S.tablet; if (!T) return; T.t += dt; const st = ctrl.state, cv = tabCv, c = cv.getContext('2d'), W = cv.width, H = cv.height;
-    const B = map.bounds || { minX: -35, maxX: 35, minZ: -35, maxZ: 35 }, sc = Math.min((W - 24) / (B.maxX - B.minX), (H - 24) / (B.maxZ - B.minZ)), ox = W / 2 - (B.minX + B.maxX) / 2 * sc, oz = H / 2 - (B.minZ + B.maxZ) / 2 * sc;
-    const X = (x) => ox + x * sc, Z = (z) => oz + z * sc;
-    // cursor from mouse deltas
-    T.x = mm(T.x + look.dx * 0.12 / (sc / 6), B.minX, B.maxX); T.z = mm(T.z + look.dy * 0.12 / (sc / 6), B.minZ, B.maxZ); look.dx = look.dy = 0;
-    c.clearRect(0, 0, W, H); if (snapOK) { c.drawImage(snapCv, 0, 0); c.fillStyle = 'rgba(20,40,70,.12)'; c.fillRect(0, 0, W, H); } else { c.fillStyle = '#c6e4cf'; c.fillRect(0, 0, W, H); }
-    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 1; for (let g = Math.ceil(B.minX / 10) * 10; g <= B.maxX; g += 10) { c.beginPath(); c.moveTo(X(g), Z(B.minZ)); c.lineTo(X(g), Z(B.maxZ)); c.stroke(); } for (let g = Math.ceil(B.minZ / 10) * 10; g <= B.maxZ; g += 10) { c.beginPath(); c.moveTo(X(B.minX), Z(g)); c.lineTo(X(B.maxX), Z(g)); c.stroke(); }
-    c.font = '700 13px Fredoka,system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    const arr = (v) => Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.entries(v).map(([k, o]) => (o && o.name === undefined ? { name: k, ...o } : o)) : []);
-    for (const s of arr(map.bombsites)) { const p = s.position || s.center || s; const x = p.x, z = p.z !== undefined ? p.z : p.y; if (x === undefined) continue; c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(X(x), Z(z), 16, 0, 6.283); c.fill(); c.fillStyle = '#333'; c.font = '800 18px Fredoka,system-ui'; c.fillText(String(s.name || s.id || '?').slice(0, 1).toUpperCase(), X(x), Z(z) + 1); }
-    c.font = '700 11px Fredoka,system-ui'; for (const co of arr(map.callouts)) { const p = co.position || co; if (p.x === undefined) continue; c.lineWidth = 3.5; c.strokeStyle = 'rgba(20,30,60,.85)'; c.strokeText(co.name, X(p.x), Z(p.z)); c.fillStyle = '#fff'; c.fillText(co.name, X(p.x), Z(p.z)); }
-    // player
-    c.save(); c.translate(X(st.position.x), Z(st.position.z)); c.rotate(-st.yaw); c.fillStyle = '#2ee6a0'; c.strokeStyle = '#0b3'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 8); c.lineTo(0, 4); c.lineTo(-8, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
-    c.fillStyle = '#1a7f55'; c.font = '800 11px Fredoka,system-ui'; c.fillText('YOU', X(st.position.x), Z(st.position.z) + 20);
-    // footprint preview
-    const pr = 0.5 + 0.5 * Math.sin(T.t * 6);
-    if (T.id === 'missile') { c.strokeStyle = '#ff3b5c'; c.fillStyle = 'rgba(255,59,92,.18)'; c.lineWidth = 3; c.beginPath(); c.arc(X(T.x), Z(T.z), cfg.missile.blastRadius * sc, 0, 6.283); c.fill(); c.stroke(); }
-    else { const a = cfg.airstrike; let fx = T.x - st.position.x, fz = T.z - st.position.z; const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l; for (let i = 0; i < a.bombs; i++) { const off = (i - (a.bombs - 1) / 2) * a.spacing; c.strokeStyle = '#ff3b5c'; c.fillStyle = 'rgba(255,59,92,.18)'; c.lineWidth = 2.5; c.beginPath(); c.arc(X(T.x + fx * off), Z(T.z + fz * off), a.blastRadius * sc, 0, 6.283); c.fill(); c.stroke(); } }
-    const cx = X(T.x), cz = Z(T.z); c.strokeStyle = '#ff3b5c'; c.lineWidth = 3; c.beginPath(); c.arc(cx, cz, 9 + pr * 3, 0, 6.283); c.moveTo(cx - 20, cz); c.lineTo(cx - 6, cz); c.moveTo(cx + 6, cz); c.lineTo(cx + 20, cz); c.moveTo(cx, cz - 20); c.lineTo(cx, cz - 6); c.moveTo(cx, cz + 6); c.lineTo(cx, cz + 20); c.stroke();
+    const B = map.bounds || { minX: -35, maxX: 35, minZ: -35, maxZ: 35 };
+    T.x = mm(T.x + look.dx * 0.07, B.minX, B.maxX); T.z = mm(T.z + look.dy * 0.07, B.minZ, B.maxZ); look.dx = look.dy = 0;
+    camT -= 1; if (camT <= 0) { renderFeed(T, st); camT = 2; }
+    c.fillStyle = '#10161f'; c.fillRect(0, 0, W, H); c.drawImage(feed, 0, 0, W, H);
+    c.fillStyle = 'rgba(60,110,120,.12)'; c.fillRect(0, 0, W, H);
+    const P = (x, z) => { const vv = new THREE.Vector3(x, (map.getHeight && isFinite(map.getHeight(x, z)) ? map.getHeight(x, z) : 0) + 0.1, z).project(camCam); return [(vv.x * 0.5 + 0.5) * W, (-vv.y * 0.5 + 0.5) * H]; };
+    const ring = (x, z, r, fill) => { c.beginPath(); for (let k = 0; k <= 24; k++) { const a = k / 24 * 6.283, p = P(x + Math.cos(a) * r, z + Math.sin(a) * r); k ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); } c.closePath(); if (fill) c.fill(); c.stroke(); };
+    c.lineWidth = 2.5; c.strokeStyle = '#ff3b5c'; c.fillStyle = 'rgba(255,59,92,.2)';
+    if (T.id === 'missile') ring(T.x, T.z, cfg.missile.blastRadius, true);
+    else { const a = cfg.airstrike; let fx = T.x - st.position.x, fz = T.z - st.position.z; const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l; for (let i = 0; i < a.bombs; i++) { const off = (i - (a.bombs - 1) / 2) * a.spacing; ring(T.x + fx * off, T.z + fz * off, a.blastRadius, true); } }
+    const me = P(st.position.x, st.position.z); if (me[0] > 10 && me[0] < W - 10 && me[1] > 10 && me[1] < H - 10) { c.fillStyle = '#2ee6a0'; c.beginPath(); c.moveTo(me[0], me[1] - 11); c.lineTo(me[0] + 8, me[1] + 7); c.lineTo(me[0] - 8, me[1] + 7); c.closePath(); c.fill(); c.font = '800 12px Fredoka,system-ui'; c.textAlign = 'center'; c.fillStyle = '#fff'; c.fillText('YOU', me[0], me[1] + 22); }
+    // camera-feed look: scanlines, noise, vignette
+    c.fillStyle = 'rgba(0,0,0,.10)'; for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+    for (let k = 0; k < 140; k++) { c.fillStyle = `rgba(255,255,255,${Math.random() * 0.12})`; c.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 6, 1); }
+    const vg = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.85); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.45)'); c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    // reticle + HUD
+    c.strokeStyle = '#ff3b5c'; c.lineWidth = 2.5; const cx = W / 2, cy = H / 2, pr = 0.5 + 0.5 * Math.sin(T.t * 6); c.beginPath(); c.arc(cx, cy, 12 + pr * 3, 0, 6.283); c.moveTo(cx - 30, cy); c.lineTo(cx - 8, cy); c.moveTo(cx + 8, cy); c.lineTo(cx + 30, cy); c.moveTo(cx, cy - 30); c.lineTo(cx, cy - 8); c.moveTo(cx, cy + 8); c.lineTo(cx, cy + 30); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 2; for (const [x, y, sx, sy] of [[14, 14, 1, 1], [W - 14, 14, -1, 1], [14, H - 14, 1, -1], [W - 14, H - 14, -1, -1]]) { c.beginPath(); c.moveTo(x, y + sy * 22); c.lineTo(x, y); c.lineTo(x + sx * 22, y); c.stroke(); }
+    c.font = '700 14px Fredoka,system-ui'; c.textAlign = 'left'; c.fillStyle = '#fff'; if (Math.floor(T.t * 1.5) % 2 === 0) { c.fillStyle = '#ff3b5c'; c.beginPath(); c.arc(30, 33, 6, 0, 6.283); c.fill(); } c.fillStyle = '#fff'; c.fillText('REC  HELI-1 CAM', 44, 38);
+    c.textAlign = 'right'; c.fillText('ALT 58 m  ·  ' + new Date().toTimeString().slice(0, 8), W - 28, 38);
+    c.textAlign = 'left'; c.fillText(`TGT  X ${T.x.toFixed(0)}  Z ${T.z.toFixed(0)}`, 28, H - 28);
   }
-
   // ---------- API ----------
   function call(id) {
     if (!S.enabled || (S.active || S.finish || S.tablet) && id !== 'uav') return false;
