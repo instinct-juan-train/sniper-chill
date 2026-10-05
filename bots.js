@@ -7,6 +7,7 @@
 //   manager.damage(bot, newHealth, headshot)
 //   manager.aliveCount()
 import * as AI from './botsai.js';
+import { createCharacter, CHARACTER_IDS } from './characters.js';
 export function createBots(THREE, scene, map, opts) {
   const { raycast, colliders } = opts;
   const useAI = !/[?&]ai=simple/.test(typeof location !== 'undefined' ? location.search : '');
@@ -69,12 +70,9 @@ export function createBots(THREE, scene, map, opts) {
 
   function spawn(pos, o = {}) {
     const col = palette[(nextId - 1) % palette.length];
-    const group = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: col, flatShading: true });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.8, 0.32), bodyMat); body.position.y = 1.0; group.add(body);
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.6, 0.28), new THREE.MeshLambertMaterial({ color: 0x2f3550, flatShading: true })); legs.position.y = 0.3; group.add(legs);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), skin); head.position.y = 1.62; group.add(head);
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.55), gunMat); gun.position.set(0.28, 1.1, -0.3); group.add(gun);
+    const ch = createCharacter(THREE, { id: CHARACTER_IDS[(nextId - 1) % CHARACTER_IDS.length], team: 'T', weapon: o.weapon || (o.pro && o.difficulty === 'hard' ? 'sniper' : 'machinegun') });
+    const group = ch.group;
+    const bodyMat = { emissive: { setHex() {} } };
     const bar = makeBar(); bar.spr.position.y = 2.05; Object.defineProperty(bar.spr, 'visible', { get: () => false, set() {} }); group.add(bar.spr);
     group.position.set(pos.x, pos.y, pos.z); scene.add(group);
     const b = {
@@ -85,21 +83,23 @@ export function createBots(THREE, scene, map, opts) {
     };
     if (useAI && o.pro) {
       const ai = AI.createBot({ id: b.id, team: 'CT', difficulty: o.difficulty || 'medium', x: pos.x, y: pos.y, z: pos.z, yaw: Math.random() * 6.28 });
-      Object.assign(ai, { group, bodyMat, baseColor: col, bar, height: 1.8, flash: 0, deadT: 0, pro: true, defuser: !!o.defuser });
+      Object.assign(ai, { group, bodyMat, baseColor: col, bar, ch, height: ch.height || 1.8, flash: 0, deadT: 0, pro: true, defuser: !!o.defuser });
       ai.position = ai;
       Object.defineProperty(ai, 'health', { get() { return ai.hp; } });
       if (!aiList.length) AI.newRound(aiWorld);
+      Object.defineProperty(ai, 'hitZones', { get() { return ch.hitZones(); } });
       aiList.push(ai); list.push(ai); return ai;
     }
+    b.ch = ch; Object.defineProperty(b, 'hitZones', { get() { return ch.hitZones(); } });
     list.push(b); return b;
   }
   function clear() { for (const b of list) scene.remove(b.group); list.length = 0; aiList.length = 0; AI.newRound(aiWorld); }
   function damage(b, newHealth, head) {
     if (b.pro) {
       const dmg = b.hp - newHealth; AI.damageBot(b, dmg, lastEnv ? lastEnv.playerEye.x : b.x, lastEnv ? lastEnv.playerEye.z : b.z, !!head);
-      b.bar.draw(Math.max(0, b.hp) / 100); b.flash = 0.12; if (!b.alive) { b.deadT = 0; b.bar.spr.visible = false; } return;
+      b.bar.draw(Math.max(0, b.hp) / 100); b.flash = 0.12; b.ch.setAnim(b.alive ? 'hit' : 'death'); if (!b.alive) { b.deadT = 0; b.bar.spr.visible = false; } return;
     }
-    b.health = newHealth; b.bar.draw(Math.max(0, newHealth) / 100); b.flash = 0.12;
+    b.health = newHealth; b.bar.draw(Math.max(0, newHealth) / 100); b.flash = 0.12; b.ch.setAnim(newHealth <= 0 ? 'death' : 'hit');
     if (newHealth <= 0) { b.alive = false; b.deadT = 0; b.bar.spr.visible = false; }
   }
   function aliveCount() { let n = 0; for (const b of list) if (b.alive) n++; return n; }
@@ -120,6 +120,19 @@ export function createBots(THREE, scene, map, opts) {
     return true;
   }
 
+  // drive the character rig from the bot's actual movement
+  function charTick(b, dt, x, z) {
+    let speed, aiming, pitch = 0, reloading = false, weapon;
+    if (b.pro) {
+      speed = b.speed || 0; weapon = b.weapon; reloading = !!b.reloading; pitch = b.pitch || 0;
+      aiming = b.state === 'engage' || String(b.state).startsWith('cover') || !!b.scoped;
+    } else {
+      const lp = b._lp || (b._lp = { x, z }); const sp = dt > 0 ? Math.hypot(x - lp.x, z - lp.z) / dt : 0; lp.x = x; lp.z = z;
+      b._sp = (b._sp ?? sp) + (sp - (b._sp ?? sp)) * 0.3; speed = b._sp; aiming = b.seen > 0.3;
+      const pe = lastEnv ? lastEnv.playerEye : null; if (aiming && pe) pitch = Math.atan2(pe.y - (b.group.position.y + 1.5), Math.hypot(pe.x - x, pe.z - z));
+    }
+    b.ch.update(dt, { speed, aiming, pitch, reloading, weapon: weapon === 'machinegun' || weapon === 'pistol' || weapon === 'sniper' ? weapon : undefined, alive: true, distance: lastEnv && lastEnv.playerEye ? Math.hypot(lastEnv.playerEye.x - x, lastEnv.playerEye.z - z) : undefined });
+  }
   function update(dt, env) {
     const events = [];
     if (aiList.length && dt > 0) {
@@ -131,13 +144,13 @@ export function createBots(THREE, scene, map, opts) {
       if (!aiWorld.defuseOk) aiWorld.defuseOk = true;
       try { AI.update(aiList, dt, aiWorld); } catch (err) { console.error('AI error', err); }
       for (const b of aiList) if (b.alive) { const h = grid.heightAt(b.x, b.z); if (isFinite(h)) b.y += (h - b.y) * Math.min(1, dt * 12); }
-      for (const e of aiEvents) { if (e.type === 'defused') { if (bo && bo.defuse && bo.defuse(5)) events.push(e); } else events.push(e); }
+      for (const e of aiEvents) { if (e.type === 'shot') { for (const b of aiList) if (b.alive && Math.hypot(b.x - e.from.x, b.z - e.from.z) < 0.6) b.ch.setAnim('shoot'); } if (e.type === 'defused') { if (bo && bo.defuse && bo.defuse(5)) events.push(e); } else events.push(e); }
     }
     for (const b of list) {
-      if (b.pro && b.alive) { b.flash = Math.max(0, b.flash - dt); b.bodyMat.emissive.setHex(b.flash > 0 ? 0xffffff : 0); b.group.position.set(b.x, b.y, b.z); b.group.rotation.y = b.yaw; continue; }
+      if (b.pro && b.alive) { b.group.position.set(b.x, b.y, b.z); b.group.rotation.y = b.yaw; charTick(b, dt, b.x, b.z); continue; }
       if (!b.alive) {
-        b.deadT += dt; b.group.rotation.x = -Math.min(Math.PI / 2, b.deadT * 4);
-        if (b.deadT > 4) b.group.visible = false;
+        b.deadT += dt; b.ch.update(dt, { alive: false });
+        if (b.deadT > 6) b.group.visible = false;
         continue;
       }
       b.flash = Math.max(0, b.flash - dt); b.bodyMat.emissive.setHex(b.flash > 0 ? 0xffffff : 0x000000);
@@ -177,6 +190,7 @@ export function createBots(THREE, scene, map, opts) {
         step(b, dt, 2.2 * b.speedMul);
       }
       b.group.position.set(b.position.x, b.position.y, b.position.z); b.group.rotation.y = b.yaw;
+      charTick(b, dt, b.position.x, b.position.z);
     }
     return events;
   }

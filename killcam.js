@@ -228,12 +228,14 @@ export function createKillCam(THREE, opts) {
   // ---------- stand-in + ragdoll ----------
   function makeStandIn(bot) {
     const grp = bot.group; grp.updateMatrixWorld(true); const pieces = [];
-    grp.children.forEach((c) => {
-      if (!c.isMesh) return; const m = new THREE.Mesh(c.geometry, c.material.clone());
+    const meshes = []; grp.traverse((c) => { let v = c.visible, p = c.parent; while (v && p && p !== grp.parent) { v = v && p.visible; p = p.parent; } if (c.isMesh && v && !c.userData.zone && c.material && !Array.isArray(c.material)) meshes.push(c); });
+    meshes.forEach((c) => {
+      const m = new THREE.Mesh(c.geometry, c.material.clone());
       c.matrixWorld.decompose(m.position, m.quaternion, m.scale); scene.add(m);
       c.geometry.computeBoundingBox(); const bb = c.geometry.boundingBox, sz = bb.getSize(V()).multiply(m.scale);
       pieces.push({ m, size: sz, vol: sz.x * sz.y * sz.z, sphere: c.geometry.type === 'SphereGeometry' });
     });
+    if (!pieces.length) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.3), new THREE.MeshLambertMaterial({ color: 0xff8a3a })); grp.getWorldPosition(m.position); m.position.y += 0.8; scene.add(m); pieces.push({ m, size: V(0.5, 1.2, 0.3), vol: 0.18, sphere: false }); }
     grp.visible = false;
     let torso = null; pieces.filter((p) => !p.sphere).forEach((p) => { if (!torso || p.vol > torso.vol) torso = p; });
     let head = pieces.find((p) => p.sphere) || null; if (!torso) torso = pieces[0];
