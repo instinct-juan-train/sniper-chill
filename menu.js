@@ -36,30 +36,30 @@ const ICONS = {
   frag: '<svg viewBox="0 0 54 54"><circle cx="27" cy="31" r="14"/><path d="M22 17l5-7 8 3M27 10v-3"/></svg>',
 };
 export const STREAK_INFO = [
-  { id: 'uav', name: 'Radar UAV', at: 3, key: '4', desc: 'Revela a todos los enemigos en el mapa durante 20 s.' },
-  { id: 'missile', name: 'Misil teledirigido', at: 5, key: '5', desc: 'Pilota un misil desde el cielo y estrállalo donde quieras.' },
-  { id: 'rc', name: 'Coche RC bomba', at: 7, key: '6', desc: 'Conduce un cochecito explosivo contra los bots.' },
-  { id: 'airstrike', name: 'Ataque aéreo', at: 9, key: '7', desc: 'Marca un punto y bombardea en línea.' },
+  { id: 'uav', name: 'Radar UAV', at: 3, key: '4', desc: 'Reveals every enemy on the map for 20 s.' },
+  { id: 'missile', name: 'Guided missile', at: 5, key: '5', desc: 'Steer a missile down from the sky and crash it wherever you like.' },
+  { id: 'rc', name: 'RC bomb car', at: 7, key: '6', desc: 'Drive an explosive little car into the bots.' },
+  { id: 'airstrike', name: 'Airstrike', at: 9, key: '7', desc: 'Mark a spot and bomb it in a line.' },
 ];
 export function buildMenu(game, THREE, createCharacter, ROSTER) {
   if (!document.getElementById('mn-css')) { const s = document.createElement('style'); s.id = 'mn-css'; s.textContent = CSS; document.head.appendChild(s); }
   const ov = game.ov, bg = document.createElement('div'); bg.className = 'mn-bg'; bg.innerHTML = '<canvas></canvas>'; ov.appendChild(bg);
   const stopConf = startConfetti(bg.querySelector('canvas'), { rain: 22, speed: .35 });
-  const name = (() => { try { return localStorage.getItem('sc_name') || 'Jugador'; } catch (e) { return 'Jugador'; } })();
+  const name = (() => { try { return localStorage.getItem('sc_name') || 'Player'; } catch (e) { return 'Player'; } })();
   const el = document.createElement('div'); el.className = 'mn';
   const items = [
-    { t: 'Jugar contra bots', a: () => game.start('bomb') },
-    { t: '1v1', lock: 'pronto' }, { t: '2v2', lock: 'pronto' }, { gap: 1 },
-    { t: 'Rachas', p: 'streaks' }, { t: 'Ayuda', p: 'help' }, { t: 'Ajustes', a: () => game.openSettings() },
+    { t: 'Play vs bots', a: () => game.start('bomb') },
+    { t: '1v1', lock: 'soon' }, { t: '2v2', lock: 'soon' }, { gap: 1 },
+    { t: 'Streaks', p: 'streaks' }, { t: 'Help', p: 'help' }, { t: 'Settings', a: () => game.openSettings() },
   ];
   el.innerHTML = `<div class="mn-char"><canvas style="width:100%;height:100%"></canvas></div><div class="mn-logo"><div class="chl">${logoHTML()}</div></div><div class="mn-list"></div><div class="mn-pan"></div>
-<div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">NIVEL 1</div></div>
-<div class="mn-bar"><span><kbd>↑↓</kbd>Elegir</span><span><kbd>Enter</kbd>Seleccionar</span><span><kbd>Esc</kbd>Atrás</span></div>`;
+<div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">LEVEL 1</div></div>
+<div class="mn-bar"><span><kbd>↑↓</kbd>Navigate</span><span><kbd>Enter</kbd>Select</span><span><kbd>Esc</kbd>Back</span></div>`;
   ov.appendChild(el);
   const list = el.querySelector('.mn-list'), pan = el.querySelector('.mn-pan'); let sel = 0; const btns = [];
   const panels = {
-    streaks: () => `<h3>RACHAS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} BAJAS · TECLA ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G usa la primera. Si mueres la pierdes; si sobrevives la ronda se conserva.</p>`,
-    help: () => `<h3>CONTROLES</h3><div class="mn-keys">${[['WASD', 'Moverte'], ['Ratón', 'Apuntar'], ['Clic', 'Disparar'], ['Clic dcho', 'Mirilla'], ['Shift', 'Agacharte'], ['Espacio', 'Saltar'], ['R', 'Recargar'], ['E', 'Recoger / plantar'], ['B', 'Tienda'], ['1 2 3', 'Armas / cuchillo'], ['V H J', 'Granadas'], ['G', 'Usar racha'], ['Esc', 'Pausa']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
+    streaks: () => `<h3>STREAKS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} KILLS · KEY ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G uses the first one. You lose your streak if you die; surviving the round keeps it.</p>`,
+    help: () => `<h3>CONTROLS</h3><div class="mn-keys">${[['WASD', 'Move'], ['Mouse', 'Aim'], ['Click', 'Shoot'], ['Right click', 'Scope'], ['Shift', 'Crouch'], ['Espacio', 'Jump'], ['R', 'Reload'], ['E', 'Pick up / plant'], ['B', 'Shop'], ['1 2 3', 'Weapons / knife'], ['V H J', 'Grenades'], ['G', 'Use streak'], ['Esc', 'Pause']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
   };
   const show = () => { const it = items[sel]; pan.innerHTML = it.p ? panels[it.p]() : ''; };
   const setSel = (i) => { if (items[i].gap) return; sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };

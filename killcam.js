@@ -32,7 +32,7 @@
  * ---------------------------------------------------------------------------------------------
  */
 const DEFAULTS = {
-  enabled: true, lang: 'es',
+  enabled: true, lang: 'en',
   bodyKills: 'far',          // 'always' | 'far' (>= minDistance) | 'never'  (headshot kills always get a cam)
   headshotAlways: true, minDistance: 16, cooldown: 6,
   bulletSpeed: 160, sniperSpeed: 220, trailLength: 4.5,

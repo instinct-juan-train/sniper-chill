@@ -45,7 +45,7 @@ export function startConfetti(cv, { burst = 0, rain = 40, speed = 1 } = {}) {
 export function playIntro(root, onDone) {
   ensureCSS();
   const el = document.createElement('div'); el.className = 'chi';
-  el.innerHTML = `<canvas></canvas><div class="chl">${logoHTML()}</div><div class="cht">CHILL · AIM · ENJOY</div><div class="chs">clic para saltar</div>`;
+  el.innerHTML = `<canvas></canvas><div class="chl">${logoHTML()}</div><div class="cht">CHILL · AIM · ENJOY</div><div class="chs">click to skip</div>`;
   root.appendChild(el);
   const stop = startConfetti(el.querySelector('canvas'), { burst: 140, rain: 30 });
   let done = false;

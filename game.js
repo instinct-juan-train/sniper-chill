@@ -104,7 +104,7 @@ export class Game {
     this.killfx.config.slowmo = false; // killcam owns time; only last-enemy kills get the cinematic
     this.streaks = createStreaks({ THREE, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
       isPlaying: () => this.state === 'play',
-      onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Racha: baja +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
+      onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Streak kill +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
     this.streaks.on('explosion', ({ position, radius, source }) => this.destruction.damage(position, radius, source === 'rc' ? 150 : 200, { source }));
     this.grenades = createGrenades(THREE, { scene: this.scene, map: m, colliders: this.world,
       raycast, destruction: this.destruction, getTargets: () => this.bots.list,
@@ -214,8 +214,8 @@ export class Game {
     if (killed) {
       this.streaks.registerKill({ headshot: false }); this.eco.recordKill({ id: b.id, headshot: false, weapon: 'pistol' });
       const bw = (b.ch && b.ch.weapon) || 'machinegun'; this.addDrop({ dropId: 'bot-' + b.id + '-' + Date.now(), weapon: bw, ammo: { mag: 12, reserve: 24 }, position: { x: b.position.x, y: b.position.y, z: b.position.z } });
-      this.kills++; this.score += back ? 150 : 100; this.kf.textContent = back ? 'APUÑALADA +150' : 'Baja +100'; this.kfT = 1.5;
-    } else { this.kf.textContent = 'Corte -55'; this.kfT = 0.8; }
+      this.kills++; this.score += back ? 150 : 100; this.kf.textContent = back ? 'BACKSTAB +150' : 'Kill +100'; this.kfT = 1.5;
+    } else { this.kf.textContent = 'Slash -55'; this.kfT = 0.8; }
   }
   updateKnife(dt) {
     if (this.knifeCd > 0) this.knifeCd -= dt;
@@ -231,9 +231,9 @@ export class Game {
     const sig = [inv.primary, inv.secondary, cur, gr.frag, gr.smoke, gr.flash, this.state].join('|'); if (sig === this.invSig) return; this.invSig = sig;
     const it = (key, label, sub, on, extra = '') => `<div class="it${on ? ' cur' : ''}${extra}"><kbd>${key}</kbd><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
     let h = '';
-    h += inv.primary ? it('1', nm(inv.primary), '', cur === inv.primary) : it('1', 'Principal', 'vacío', false, ' empty');
+    h += inv.primary ? it('1', nm(inv.primary), '', cur === inv.primary) : it('1', 'Primary', 'empty', false, ' empty');
     h += it('2', nm(inv.secondary || 'pistol'), '', cur === (inv.secondary || 'pistol'));
-    h += it('3', inv.knifeskin ? 'Kite Cutter' : 'Cuchillo', '', cur === 'knife');
+    h += it('3', inv.knifeskin ? 'Kite Cutter' : 'Knife', '', cur === 'knife');
     const gl = [['V', 'frag', 'Frag'], ['H', 'smoke', 'Humo'], ['J', 'flash', 'Flash']].filter(([, id]) => gr[id] > 0);
     if (gl.length) { h += '<div class="sep"></div>'; for (const [k, id, lab] of gl) h += it(k, lab, '×' + gr[id], false, ' gr'); }
     this.invb.innerHTML = h;
@@ -261,7 +261,7 @@ export class Game {
       if (d.open) { this.syncAmmoToEco(); this.ws.setTrigger(false); this.eDown = false; this.ctrl.exitPointerLock(); }
       else if (this.state === 'play') { try { this.ctrl.requestPointerLock(); } catch (e) {} }
     } else if (n === 'inventory' || n === 'equip' || n === 'purchase') {
-      if (n === 'purchase' && d && ['frag', 'smoke', 'flash'].includes(d.id)) { const k = { frag: 'V', smoke: 'H', flash: 'J' }[d.id]; this.invh.textContent = `Granada lista: pulsa ${k} para lanzarla (cuando acabe la fase de compra)`; this.invh.style.opacity = 1; clearTimeout(this.invhT); this.invhT = setTimeout(() => { this.invh.style.opacity = 0; }, 7000); }
+      if (n === 'purchase' && d && ['frag', 'smoke', 'flash'].includes(d.id)) { const k = { frag: 'V', smoke: 'H', flash: 'J' }[d.id]; this.invh.textContent = `Grenade ready: press ${k} to throw it (once the buy phase ends)`; this.invh.style.opacity = 1; clearTimeout(this.invhT); this.invhT = setTimeout(() => { this.invh.style.opacity = 0; }, 7000); }
       const s = d.state, inv = s.inventory;
       for (const id of [inv.primary, inv.secondary]) { if (id && !this.owned.has(id)) { this.owned.add(id); const a = inv.ammo[id]; if (a) { this.ws.ammo[id].mag = a.mag; this.ws.ammo[id].reserve = a.reserve; } } }
       for (const id of Array.from(this.owned)) if (id !== inv.primary && id !== inv.secondary) this.owned.delete(id);
@@ -286,12 +286,12 @@ export class Game {
   }
   openSettings() {
     const s = this.set, o = this.setOv; o.style.display = 'flex';
-    o.innerHTML = `<div class="setp"><h2>Ajustes</h2>
-<label class="sr"><span>Contador FPS / ms</span><input type="checkbox" data-k="fps" ${s.fps ? 'checked' : ''}></label>
-<label class="sr"><span>Sensibilidad <em data-v="sens">${s.sens.toFixed(2)}x</em></span><input type="range" min="0.3" max="2.5" step="0.05" value="${s.sens}" data-k="sens"></label>
-<label class="sr"><span>Volumen <em data-v="vol">${Math.round(s.vol * 100)}%</em></span><input type="range" min="0" max="1" step="0.05" value="${s.vol}" data-k="vol"></label>
-<label class="sr"><span>Dificultad bots <small>(desde la próxima ronda)</small></span><select data-k="diff"><option value="chill">Chill</option><option value="easy">Fácil</option><option value="medium">Media</option><option value="hard">Difícil</option></select></label>
-<button class="b" data-close>Volver</button></div>`;
+    o.innerHTML = `<div class="setp"><h2>Settings</h2>
+<label class="sr"><span>FPS / ms counter</span><input type="checkbox" data-k="fps" ${s.fps ? 'checked' : ''}></label>
+<label class="sr"><span>Sensitivity <em data-v="sens">${s.sens.toFixed(2)}x</em></span><input type="range" min="0.3" max="2.5" step="0.05" value="${s.sens}" data-k="sens"></label>
+<label class="sr"><span>Volume <em data-v="vol">${Math.round(s.vol * 100)}%</em></span><input type="range" min="0" max="1" step="0.05" value="${s.vol}" data-k="vol"></label>
+<label class="sr"><span>Bot difficulty <small>(from next round)</small></span><select data-k="diff"><option value="chill">Chill</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+<button class="b" data-close>Back</button></div>`;
     o.querySelector('select').value = s.diff;
     o.querySelectorAll('[data-k]').forEach((el) => { el.oninput = el.onchange = () => { const k = el.dataset.k; s[k] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : parseFloat(el.value); const v = o.querySelector(`[data-v="${k}"]`); if (v) v.textContent = k === 'sens' ? s.sens.toFixed(2) + 'x' : Math.round(s.vol * 100) + '%'; this.applySettings(); this.saveSettings(); }; });
     o.querySelector('[data-close]').onclick = () => this.closeSettings();
@@ -335,7 +335,7 @@ export class Game {
   }
   updateDrops(dt) {
     for (const d of this.drops || []) d.t += dt;
-    const n = this.nearestDrop(); this.hint.textContent = n ? 'E · recoger ' + (WEAPON_STATS[n.drop.weapon] ? WEAPON_STATS[n.drop.weapon].name : n.drop.weapon) : '';
+    const n = this.nearestDrop(); this.hint.textContent = n ? 'E · pick up ' + (WEAPON_STATS[n.drop.weapon] ? WEAPON_STATS[n.drop.weapon].name : n.drop.weapon) : '';
   }
   pick(slot) { this.unKnife(); const inv = this.eco.getState().inventory; const id = slot === 'primary' ? inv.primary : inv.secondary; if (id && this.eco.selectWeapon(id)) this.ws.select(id); }
   overlay(html, btns) {
@@ -353,7 +353,7 @@ export class Game {
   pause() {
     if (this.state !== 'play') return;
     this.state = 'pause'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.eDown = false; this.ctrl.exitPointerLock();
-    this.overlay('<h2>Pausa</h2><p>Haz clic para seguir (capturará el ratón).</p>', [['Continuar', () => this.resume()], ['Ajustes', () => this.openSettings(), true], ['Salir al menú', () => this.showMenu(), true]]);
+    this.overlay('<h2>Paused</h2><p>Click to continue (captures the mouse).</p>', [['Resume', () => this.resume()], ['Settings', () => this.openSettings(), true], ['Quit to menu', () => this.showMenu(), true]]);
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode, cont = false) {
@@ -380,11 +380,11 @@ export class Game {
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
       top.push(this.score); top.sort((a, b) => b - a); top = top.slice(0, 5); try { localStorage.setItem(key, JSON.stringify(top)); } catch (e) {}
-      extra = `<p>Puntos: <b>${this.score}</b> · Bajas: ${this.kills} · Headshots: ${this.heads}</p><p>Tu top de hoy (solo en este dispositivo): ${top.join(' · ')}</p>`;
+      extra = `<p>Score: <b>${this.score}</b> · Kills: ${this.kills} · Headshots: ${this.heads}</p><p>Your best today (this device only): ${top.join(' · ')}</p>`;
     }
     const mo = this.matchOver(), m = this.match;
-    this.overlay(`<h2>${mo ? (m.p > m.b ? '¡Ganas la partida!' : 'Pierdes la partida') : (win ? 'Ganas la ronda' : 'Pierdes la ronda')}</h2><p>${msg}</p><p>Marcador: <b>TÚ ${m.p} - ${m.b} BOTS</b> (mejor de 5, gana el primero en 3)</p>${extra}`,
-      mo ? [['Partida nueva', () => this.start(this.mode)], ['Menú', () => this.showMenu(), true]] : [['Siguiente ronda (conservas dinero)', () => this.start(this.mode, true)], ['Menú', () => this.showMenu(), true]]);
+    this.overlay(`<h2>${mo ? (m.p > m.b ? 'You win the match!' : 'You lose the match') : (win ? 'Round won' : 'Round lost')}</h2><p>${msg}</p><p>Score: <b>YOU ${m.p} - ${m.b} BOTS</b> (best of 5, first to 3)</p>${extra}`,
+      mo ? [['New match', () => this.start(this.mode)], ['Menu', () => this.showMenu(), true]] : [['Next round (keep your money)', () => this.start(this.mode, true)], ['Menu', () => this.showMenu(), true]]);
   }
   tracer(a, b, color = 0xfff2a0, life = 0.07) {
     const g = new THREE.BufferGeometry().setFromPoints([a, b]); const m = new THREE.LineBasicMaterial({ color, transparent: true });
@@ -412,7 +412,7 @@ export class Game {
         play(r.killed ? 'kill' : r.headshot ? 'headshot' : 'hit');
         if (r.killed) {
           this.streaks.registerKill({ headshot: r.headshot }); this.eco.recordKill({ id: b.id, headshot: r.headshot, weapon: s.weapon }); { const bw = (b.ch && b.ch.weapon) || 'machinegun'; this.addDrop({ dropId: 'bot-' + b.id + '-' + Date.now(), weapon: bw === 'pistol' ? 'pistol' : bw, ammo: { mag: 12, reserve: 24 }, position: { x: b.position.x, y: b.position.y, z: b.position.z } }); } this.kf.textContent = ''; this.kills++; this.score += 100 + (r.headshot ? 50 : 0); if (r.headshot) this.heads++;
-          this.kf.textContent = r.headshot ? 'HEADSHOT +150' : 'Baja +100'; this.kfT = 1.5;
+          this.kf.textContent = r.headshot ? 'HEADSHOT +150' : 'Kill +100'; this.kfT = 1.5;
         }
       }
       this.kc.config.gate = () => this.cineOK; this.kc.shoot({ muzzle, end, weapon: s.weapon, hit: kh });
@@ -436,7 +436,7 @@ export class Game {
     const R = 14; for (const b of this.bots.list) { if (!b.alive) continue; if (Math.hypot(b.position.x - P.x, b.position.z - P.z) < R && Math.abs(b.position.y - P.y) < 8) { this.bots.damage(b, 0, false); const bw = (b.ch && b.ch.weapon) || 'machinegun'; this.addDrop({ dropId: 'bomb-' + b.id + '-' + Date.now(), weapon: bw, ammo: { mag: 12, reserve: 24 }, position: { x: b.position.x + (Math.random() - .5) * 3, y: b.position.y, z: b.position.z + (Math.random() - .5) * 3 } }); } }
     const pp = this.ctrl.state.position, dd = Math.hypot(pp.x - P.x, pp.z - P.z), killedMe = dd < R && Math.abs(pp.y - P.y) < 8;
     if (killedMe) { const inv = this.eco.getState().inventory; if (inv.primary) this.addDrop({ dropId: 'bomb-me-' + Date.now(), weapon: inv.primary, ammo: { mag: 12, reserve: 24 }, position: { x: pp.x + 1.2, y: pp.y, z: pp.z } }); this.player.damage(999); try { this.streaks.registerDeath(); } catch (e) {} this.hud.damageFlash(); }
-    this.blasting = true; this.blastEndT = 2.1; this.blastResult = killedMe ? [false, 'La bomba te alcanzó. Aléjate más antes de que explote.'] : [true, 'La bomba explotó. ¡Ganas la ronda!']; this.bomb.t = 1e9;
+    this.blasting = true; this.blastEndT = 2.1; this.blastResult = killedMe ? [false, 'The bomb got you. Get further away before it blows.'] : [true, 'The bomb went off. Round won!']; this.bomb.t = 1e9;
     play('bomb_explode');
   }
   updateBlast(dt) {
@@ -456,7 +456,7 @@ export class Game {
       const k0 = this.ws.consumeLook(); if (k0.pitch || k0.yaw) c.look(-k0.yaw / 0.0022, -k0.pitch / 0.0022);
       c.applyToCamera(this.camera); setListener(st.eye, c.getDirection());
       this.hud.setHealth(this.player.hp);
-      this.info.textContent = es.phase === 'freeze' ? `FASE DE COMPRA · ${Math.ceil(this.eco.getState().freezeRemaining)} s · B = tienda` : '';
+      this.info.textContent = es.phase === 'freeze' ? `BUY PHASE · ${Math.ceil(this.eco.getState().freezeRemaining)} s · B = shop` : '';
       this.anim.update(dt, { moving: false, sprinting: false, grounded: true, playerEye: st.eye, feetY: st.position.y, bots: [] });
       return;
     }
@@ -472,7 +472,7 @@ export class Game {
     if (es.phase === 'freeze') {
       this.ws.setTrigger(false); this.eDown = false; this.ws.update(dt, { moving, sprinting: false, grounded: st.grounded });
       setListener(st.eye, c.getDirection()); this.hud.setHealth(this.player.hp);
-      this.info.textContent = `FASE DE COMPRA · ${Math.ceil(es.freezeRemaining)} s · B = tienda (zona verde)`;
+      this.info.textContent = `BUY PHASE · ${Math.ceil(es.freezeRemaining)} s · B = shop (stay in the barrier)`;
       this.anim.update(dt, { moving, sprinting: false, grounded: st.grounded, playerEye: st.eye, feetY: st.position.y, bots: [] });
       return;
     }
@@ -489,7 +489,7 @@ export class Game {
     let hint = '';
     if (this.mode === 'bomb' && !this.bomb.planted) {
       if (site && this.eDown && st.grounded) { this.plantT += dt; hint = `Plantando ${site}... ${Math.min(100, Math.round(this.plantT / 3.2 * 100))}%`; if (this.plantT >= 3.2) this.plant(site); }
-      else { this.plantT = 0; hint = site ? `Mantén E para plantar en ${site}` : 'Ve al sitio A o B'; }
+      else { this.plantT = 0; hint = site ? `Hold E to plant at ${site}` : 'Go to site A or B'; }
     }
     // bots
     const self = this;
@@ -510,12 +510,12 @@ export class Game {
       if (this.bomb.planted) {
         this.bomb.t -= dt; this.bomb.beepT -= dt;
         if (this.bomb.beepT <= 0) { play('bomb_beep', this.bomb.pos); this.bomb.beepT = this.bomb.t < 10 ? 0.35 : 1; }
-        hint = this.blasting ? '¡BOOM!' : `BOMBA ${this.bomb.site} · ${fmt(Math.max(0, this.bomb.t))}`;
+        hint = this.blasting ? 'BOOM!' : `BOMB ${this.bomb.site} · ${fmt(Math.max(0, this.bomb.t))}`;
         if (this.bomb.t <= 0) {
           if (!this.blasting) this.startBlast(this.bomb.pos);
         }
-      } else { this.roundT -= dt; if (this.roundT <= 0) { this.end(false, 'Se acabó el tiempo sin plantar la bomba.'); return; } }
-      if (this.bots.aliveCount() === 0 && !this.blasting) { this.end(true, 'Eliminaste a todos los bots.'); return; }
+      } else { this.roundT -= dt; if (this.roundT <= 0) { this.end(false, 'Time ran out before the bomb was planted.'); return; } }
+      if (this.bots.aliveCount() === 0 && !this.blasting) { this.end(true, 'You eliminated all the bots.'); return; }
       this.info.textContent = `${hint}${this.bomb.planted ? '' : ' · ' + fmt(this.roundT)} · Bots ${this.bots.aliveCount()}`;
       this.hud.setBombText('');
     } else {
@@ -524,8 +524,8 @@ export class Game {
         this.spawnTimer = 1.2;
         for (let i = 0; i < 12; i++) { const p = this.map.navGrid.randomWalkable(); if (Math.hypot(p.x - st.position.x, p.z - st.position.z) > 18) { this.bots.spawn(p); break; } }
       }
-      this.info.textContent = `${fmt(Math.max(0, this.roundT))} · Puntos ${this.score} · Bajas ${this.kills}`;
-      if (this.roundT <= 0) this.end(true, 'Tiempo. Buen reto.');
+      this.info.textContent = `${fmt(Math.max(0, this.roundT))} · Score ${this.score} · Kills ${this.kills}`;
+      if (this.roundT <= 0) this.end(true, 'Time. Nice run.');
     }
   }
   plant(site) {

@@ -13,7 +13,7 @@ export const DEFAULT_CONFIG = {
   countStreakKills: false,    // do kills made by streaks feed the counter?
   loop: false,                // after the last reward, restart the counter from 0
   selfDamage: false,          // blasts hurt the player (not implemented: reserved)
-  names: { uav: 'Radar UAV', missile: 'Misil teledirigido', rc: 'Coche RC bomba', airstrike: 'Ataque aéreo' },
+  names: { uav: 'Radar UAV', missile: 'Guided missile', rc: 'RC bomb car', airstrike: 'Airstrike' },
   uav: { duration: 20, alertBots: true, alertRadius: 30 },
   missile: { speed: 50, boost: 90, lifetime: 20, startHeight: 150, startBack: 10, startPitch: -1.1, blastRadius: 9, maxDamage: 140, minDamage: 40, alertBots: true },
   rc: { speed: 10, boost: 17, turnRate: 2.4, lifetime: 25, blastRadius: 6, maxDamage: 130, minDamage: 40, contactRadius: 1.15, engineNoise: true },
@@ -92,14 +92,14 @@ export function createStreaks(ctx) {
   const slots = {};
   for (const r of cfg.rewards) {
     const el = document.createElement('div'); el.className = 'slot';
-    el.innerHTML = `<span class="k">${r.key.replace('Digit', '').replace('Key', '')}</span>${ICON[r.id] || ''}<span class="t">${r.at} bajas</span><span class="n"></span>`;
+    el.innerHTML = `<span class="k">${r.key.replace('Digit', '').replace('Key', '')}</span>${ICON[r.id] || ''}<span class="t">${r.at} kills</span><span class="n"></span>`;
     tray.appendChild(el); slots[r.id] = el;
   }
   let bannerT = 0;
   function showBanner(title, sub, t = 2.2) { banner.querySelector('b').textContent = title; banner.querySelector('span').textContent = sub || ''; banner.classList.add('on'); bannerT = t; }
   function refreshHud() {
     const max = Math.max(...cfg.rewards.map((r) => r.at));
-    let h = `<span>RACHA ${S.count}</span>`;
+    let h = `<span>STREAK ${S.count}</span>`;
     for (let i = 1; i <= max; i++) h += `<i class="pip${i <= S.count ? ' on' : ''}${cfg.rewards.some((r) => r.at === i) ? ' mark' : ''}"></i>`;
     streakEl.innerHTML = h;
     for (const r of cfg.rewards) {
@@ -172,7 +172,7 @@ export function createStreaks(ctx) {
     const maxAt = Math.max(...cfg.rewards.map((r) => r.at));
     for (const r of cfg.rewards) if (r.at === S.count) {
       S.inv[r.id] = (S.inv[r.id] || 0) + 1; play('headshot');
-      showBanner(`${cfg.names[r.id] || r.id} listo`, `Racha de ${S.count} · pulsa ${r.key.replace('Digit', '').replace('Key', '')} (o ${cfg.callKey.replace('Key', '')})`);
+      showBanner(`${cfg.names[r.id] || r.id} ready`, `${S.count} kill streak · press ${r.key.replace('Digit', '').replace('Key', '')} (or ${cfg.callKey.replace('Key', '')})`);
       emit('earned', { id: r.id, at: r.at, count: S.count });
     }
     emit('progress', { count: S.count });
@@ -211,7 +211,7 @@ export function createStreaks(ctx) {
       m.g.position.set(b.position.x, b.position.y, b.position.z); m.tri.position.y = 2.4 + Math.sin(performance.now() / 180) * 0.12;
     }
     for (const [b, m] of uavMarks) if (!live.has(b)) { scene.remove(m.g); uavMarks.delete(b); }
-    drawMini(); minilab.textContent = `UAV ${fmt(S.uav.t)} · ${live.size} enemigos`;
+    drawMini(); minilab.textContent = `UAV ${fmt(S.uav.t)} · ${live.size} enemies`;
   }
   function drawMini() {
     const c = mctx, W = 300, R = 150, scale = R / 34, st = ctrl.state;
@@ -259,7 +259,7 @@ export function createStreaks(ctx) {
     const pos = new THREE.Vector3(st.eye.x - f.x * c.startBack, st.eye.y + c.startHeight, st.eye.z - f.z * c.startBack);
     const g = new THREE.Mesh(geo.ring, mat(0xff5a7a)); g.rotation.x = Math.PI / 2; scene.add(g);
     S.active = { id: 'missile', pos, yaw, pitch: c.startPitch, t: c.lifetime, speed: c.speed, ring: g, grace: 0.35 };
-    play('bomb_beep'); showBanner('Misil en camino', 'Ratón: dirigir · clic: acelerar · Espacio: detonar', 2.2);
+    play('bomb_beep'); showBanner('Missile inbound', 'Mouse: steer · click: boost · Space: detonate', 2.2);
     emit('called', { id: 'missile' });
   }
   function updateMissile(dt) {
@@ -280,8 +280,8 @@ export function createStreaks(ctx) {
       S.finish = { kind: 'missile', t: 0.9 }; S.active = null; return;
     }
     a.pos.x += d.x * a.speed * dt; a.pos.y += d.y * a.speed * dt; a.pos.z += d.z * a.speed * dt;
-    const alt = Math.max(0, Math.round(a.pos.y * 3.28)); rdTop.textContent = `MISIL · ALT ${alt} m`; barI.style.width = mm(a.t / c.lifetime, 0, 1) * 100 + '%';
-    rdBot.textContent = 'Ratón dirigir · clic acelerar · Espacio/E detonar';
+    const alt = Math.max(0, Math.round(a.pos.y * 3.28)); rdTop.textContent = `MISSILE · ALT ${alt} m`; barI.style.width = mm(a.t / c.lifetime, 0, 1) * 100 + '%';
+    rdBot.textContent = 'Mouse steer · click boost · Space/E detonate';
     camera.position.copy(a.pos); camera.rotation.set(a.pitch, a.yaw, Math.sin(performance.now() / 700) * 0.035, 'YXZ'); camera.fov = 78 + (a.speed - c.speed) * 0.5; camera.updateProjectionMatrix();
   }
 
@@ -313,7 +313,7 @@ export function createStreaks(ctx) {
     if (blockedAt(x, z, y, 0.45)) { x = st.position.x; z = st.position.z; }
     const mesh = carMesh(); scene.add(mesh);
     S.active = { id: 'rc', x, z, y: map.getHeight(x, z), yaw, v: 0, t: c.lifetime, mesh, noiseT: 0, grace: 0.4 };
-    play('bomb_beep'); showBanner('Coche RC', 'WASD conducir · Shift turbo · Espacio/clic detonar', 2.2);
+    play('bomb_beep'); showBanner('RC car', 'WASD drive · Shift turbo · Space/click detonate', 2.2);
     emit('called', { id: 'rc' });
   }
   function updateRc(dt) {
@@ -341,8 +341,8 @@ export function createStreaks(ctx) {
     }
     const cp = new THREE.Vector3(a.x - fx * 2.7, a.y + 1.15, a.z - fz * 2.7);
     camera.position.copy(cp); camera.rotation.set(-0.14, a.yaw, -sr * 0.03, 'YXZ'); camera.fov = 82 + Math.abs(a.v) * 0.5; camera.updateProjectionMatrix();
-    rdTop.textContent = `COCHE RC · ${Math.max(0, a.t).toFixed(0)} s`; barI.style.width = mm(a.t / c.lifetime, 0, 1) * 100 + '%';
-    rdBot.textContent = 'WASD conducir · Shift turbo · Espacio/E/clic detonar';
+    rdTop.textContent = `RC CAR · ${Math.max(0, a.t).toFixed(0)} s`; barI.style.width = mm(a.t / c.lifetime, 0, 1) * 100 + '%';
+    rdBot.textContent = 'WASD drive · Shift turbo · Space/E/click detonate';
   }
 
   // --- airstrike ---
@@ -354,7 +354,7 @@ export function createStreaks(ctx) {
     const fwd = { x: -Math.sin(yaw), z: -Math.cos(yaw) };
     marker({ x: tp.x, y: ty, z: tp.z }, 2.2, 0xff5a7a, c.delay + c.bombs * c.interval + 0.8);
     S.strikes.push({ t: -c.delay, i: 0, tp: { x: tp.x, y: ty, z: tp.z }, fwd, drops: [] });
-    play('bomb_beep'); showBanner('Ataque aéreo', 'Marcado donde apuntabas. ¡Aléjate de la zona!', 2.2);
+    play('bomb_beep'); showBanner('Airstrike', 'Marked where you aimed. Get out of the zone!', 2.2);
     emit('called', { id: 'airstrike', target: { ...tp } });
     refreshHud();
   }
@@ -382,7 +382,7 @@ export function createStreaks(ctx) {
     if (id === 'uav' && S.uav) return false;
     if (!(S.inv[id] > 0)) return false;
     S.inv[id]--; look.dx = look.dy = 0;
-    if (id === 'uav') { startUav(); emit('called', { id }); showBanner('UAV activo', `Enemigos revelados ${cfg.uav.duration} s`, 1.8); }
+    if (id === 'uav') { startUav(); emit('called', { id }); showBanner('UAV active', `Enemies revealed for ${cfg.uav.duration} s`, 1.8); }
     else if (id === 'missile') startMissile(); else if (id === 'rc') startRc(); else if (id === 'airstrike') startAirstrike();
     else return false;
     refreshHud(); return true;
