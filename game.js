@@ -117,6 +117,7 @@ export class Game {
     this.streaks = createStreaks({ THREE, renderer: this.renderer, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
       isPlaying: () => this.state === 'play',
       onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Streak kill +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
+    this.streaks.on('earned', () => play('streak_earned')); this.streaks.on('called', ({ id }) => play(id === 'nuke' ? 'nuke' : 'streak_call'));
     this.streaks.on('explosion', ({ position, radius, source }) => this.destruction.damage(position, radius, source === 'rc' ? 150 : 200, { source }));
     this.grenades = createGrenades(THREE, { scene: this.scene, map: m, colliders: this.world,
       raycast, destruction: this.destruction, getTargets: () => this.bots.list,
@@ -424,6 +425,7 @@ export class Game {
   }
   resume() { this.ov.style.display = 'none'; this.state = 'play'; this.ctrl.setEnabled(true); this.ctrl.requestPointerLock(); }
   start(mode, cont = false) {
+    if (!cont) play('ui_start');
     const newMatch = !cont || !this.eco || this.match.over;
     if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
     this.grenades.clearRound();
@@ -442,7 +444,7 @@ export class Game {
     this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
   }
   end(win, msg) {
-    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; if (win) this.match.p++; else this.match.b++; this.renderSB(); this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
+    if (this.over) return; this.streaks.cancel('end'); if (this.kc.active) { this.pendEnd = [win, msg]; return; } this.over = true; play(win ? 'round_win' : 'round_lose'); if (win) this.match.p++; else this.match.b++; this.renderSB(); this.syncAmmoToEco(); try { this.eco.endRound({ won: win, reason: win ? 'win' : 'loss' }); } catch (e) {} this.state = 'over'; this.ctrl.setEnabled(false); this.ws.setTrigger(false); this.ws.setAim(false); this.ctrl.exitPointerLock();
     let extra = '';
     if (this.mode === 'daily') {
       const key = 'sniperchill-daily-' + new Date().toISOString().slice(0, 10); let top = []; try { top = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
@@ -547,6 +549,7 @@ export class Game {
     const shots0 = this.streaks.controlling ? [] : this.ws.update(dt, { moving, sprinting: st.speed > 5.5, grounded: st.grounded }); const shots = this.plantT > 0 ? [] : shots0;
     if (shots.length) this.fireShots(shots);
     const fwd = c.getDirection(); setListener(st.eye, fwd);
+    { const gr = !!st.grounded; if (this._pg === undefined) this._pg = gr; if (this._pg && !gr && st.velocity && st.velocity.y > 1) play('jump'); else if (!this._pg && gr) play('land'); this._pg = gr; }
     if (moving && st.grounded) { this.stepT -= dt; if (this.stepT <= 0) { play('footstep'); this.stepT = st.speed > 5.5 ? 0.3 : 0.45; } }
     this.hud.setHealth(this.player.hp);
     if (this.kfT > 0) { this.kfT -= dt; if (this.kfT <= 0) this.kf.textContent = ''; }
@@ -559,6 +562,7 @@ export class Game {
       if (site && this.eDown && st.grounded) { this.plantT += dt; hint = `Planting ${site}... ${Math.min(100, Math.round(this.plantT / 3.2 * 100))}%`; if (this.plantT >= 3.2) this.plant(site); }
       else { this.plantT = 0; hint = site ? `Hold E to plant at ${site}` : 'Go to site A or B'; }
     }
+    if (this.plantT > 0 && !this._plS) { this._plS = true; play('plant_start'); } else if (this.plantT <= 0) this._plS = false;
     this.plantAnimTick(dt);
     // bots
     const self = this;

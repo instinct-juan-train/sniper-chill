@@ -64,12 +64,12 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
     help: () => `<h3>CONTROLS</h3><div class="mn-keys">${[['WASD', 'Move'], ['Mouse', 'Aim'], ['Click', 'Shoot'], ['Right click', 'Scope'], ['Shift', 'Crouch'], ['Space', 'Jump'], ['R', 'Reload'], ['E', 'Pick up / plant'], ['B', 'Shop'], ['1 2 3', 'Weapons / knife'], ['V H J', 'Grenades'], ['G', 'Use streak'], ['Esc', 'Pause']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
   };
   const show = () => { const it = items[sel]; pan.innerHTML = it.p ? panels[it.p]() : ''; };
-  const setSel = (i) => { if (items[i].gap) return; sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };
+  const setSel = (i) => { if (items[i].gap) return; if (i !== sel) { try { window.ChillAudio && window.ChillAudio.play('uiHover'); } catch (e) {} } sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };
   items.forEach((it, i) => { if (it.gap) { const d = document.createElement('div'); d.className = 'mn-gap'; list.appendChild(d); btns.push(null); return; }
     const b = document.createElement('button'); b.className = 'mn-i' + (it.lock ? ' lock' : ''); b.innerHTML = it.t + (it.lock ? `<em>${it.lock}</em>` : ''); b.onmouseenter = () => setSel(i); b.onclick = () => { setSel(i); if (it.a) it.a(); }; list.appendChild(b); btns.push(b); });
   setSel(0);
   const onKey = (e) => { if (game.state !== 'menu' || game.setOv.style.display !== 'none') return; const dir = e.code === 'ArrowDown' ? 1 : e.code === 'ArrowUp' ? -1 : 0;
-    if (dir) { let i = sel; do { i = (i + dir + items.length) % items.length; } while (items[i].gap); setSel(i); e.preventDefault(); } else if (e.code === 'Enter') { const it = items[sel]; if (it.a) it.a(); } else if (e.code === 'Escape') setSel(0); };
+    if (dir) { let i = sel; do { i = (i + dir + items.length) % items.length; } while (items[i].gap); setSel(i); e.preventDefault(); } else if (e.code === 'Enter') { try { window.ChillAudio && window.ChillAudio.play('uiClick'); } catch (e2) {} const it = items[sel]; if (it.a) it.a(); } else if (e.code === 'Escape') setSel(0); };
   addEventListener('keydown', onKey);
   // animated character (own tiny renderer)
   let run = true, rend = null, cleanup = () => {};

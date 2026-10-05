@@ -25,6 +25,14 @@ function ensure() {
   return ctx;
 }
 
+import './chillaudio.js';
+const CA_MAP = { ui_click: 'uiClick', ui_hover: 'uiHover', ui_start: 'uiStart', ui_back: 'uiBack', bomb_beep: 'bombBeep', beep: 'bombBeep', bomb_explode: 'bombExplosion', bomb_plant: 'bombPlanted', bomb_defuse: 'bombDefused',
+  reload: 'reload', kill: 'kill', hurt: 'hurt', hit: 'hit', headshot: 'headshot', footstep: 'step', empty: 'empty', bot_shot: 'shot_mg', jump: 'jump', land: 'land', buy: 'buy', buy_fail: 'buyFail',
+  streak_earned: 'killstreakEarned', streak_call: 'killstreakCall', nuke: 'nuke', nuke_siren: 'nukeSiren', round_win: 'roundWin', round_lose: 'roundLose', match_win: 'matchWin', match_lose: 'matchLose', death: 'death',
+  shot_pistol: 'shot_pistol', shot_mg: 'shot_mg', shot_sniper: 'shot_sniper', shot_knife: 'shot_knife',
+  plant_start: 'bombPlant', defuse_start: 'bombDefuseStart', round_start: 'roundStart', switch: 'switchWeapon', heli: 'heli', whiz: 'bulletWhiz', impact: 'bulletImpact' };
+let caReady = false;
+(function caUnlock() { const go = () => { try { if (window.ChillAudio && window.ChillAudio.init()) caReady = true; } catch (e) {} }; for (const ev of ['pointerdown', 'keydown', 'click']) document.addEventListener(ev, go, { capture: true }); })();
 export function initAudio(opts = {}) {
   if (opts.volume != null) volume = opts.volume;
   if (opts.ambient != null) wantAmbient = opts.ambient;
@@ -42,6 +50,7 @@ export function getContext() { return ctx; }
 export function setVolume(v) { volume = v; if (master) master.gain.value = v; }
 
 export function setListener(p, f, up = { x: 0, y: 1, z: 0 }) {
+  if (caReady) { try { window.ChillAudio.setListener(p, f); } catch (e) {} }
   if (!ctx) return;
   const L = ctx.listener;
   if (L.positionX) {
@@ -147,6 +156,8 @@ const SOUNDS = {
 const COOLDOWN = { shot_mg: 0.04, footstep: 0.12, hit: 0.03, bomb_beep: 0.05 };
 
 export function play(name, pos) {
+  const cm = CA_MAP[name];
+  if (cm && caReady) { try { const o = {}; if (pos && typeof pos.x === 'number') o.pos = { x: pos.x, y: pos.y, z: pos.z }; if (name === 'footstep' || name === 'jump' || name === 'land') o.volume = 0.8; return window.ChillAudio.play(cm, o) !== false; } catch (e) {} }
   const c = ensure();
   if (!c || !SOUNDS[name]) return false;
   if (c.state === 'suspended') c.resume();
