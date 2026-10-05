@@ -39,14 +39,22 @@
 //   moving, planting (0..1 progress or 0), defusing (0..1), scoped(bool), reloading(bool), state (debug label), firedAt (time).
 // ---------------------------------------------------------------------------------------------
 
+import * as Brain from './botsbrain.js';
+export { PERSONAS, PERSONA_ORDER } from './botsbrain.js';
 export const EYE = 1.6, HEAD_Y = 1.62, CHEST_Y = 1.15;
 
+// Levels, easiest -> hardest. DEFAULT is 'hard'. hear = chance to notice a sound at point blank, hearR = hearing radius multiplier.
+export const DIFFICULTY_ORDER = ['rookie', 'chill', 'easy', 'medium', 'hard', 'veteran', 'elite', 'insane'];
+export const DEFAULT_DIFFICULTY = 'hard';
 export const DIFFICULTY = {
-  easy:   { reaction: 0.70, aimSigma: 0.080, turn: 3.0,  fov: 100, view: 38, speed: 4.0, coverBias: 0.15, strafe: 0.30, headAim: 0.02, hear: 0.40, burst: 12, burstPause: 0.15, patience: 3.0, peekDur: 1.4, closeCombat: 0.4 },
-  medium: { reaction: 0.38, aimSigma: 0.036, turn: 6.0,  fov: 110, view: 55, speed: 4.7, coverBias: 0.50, strafe: 0.60, headAim: 0.12, hear: 0.70, burst: 6,  burstPause: 0.28, patience: 4.5, peekDur: 1.1, closeCombat: 0.7 },
-  hard:   { reaction: 0.20, aimSigma: 0.015, turn: 11.0, fov: 120, view: 75, speed: 5.2, coverBias: 0.85, strafe: 0.95, headAim: 0.35, hear: 1.00, burst: 4,  burstPause: 0.34, patience: 6.0, peekDur: 0.9, closeCombat: 1.0 },
-  veteran: { reaction: 0.14, aimSigma: 0.009, turn: 14.0, fov: 125, view: 85, speed: 5.4, coverBias: 0.9, strafe: 1.0, headAim: 0.5, hear: 1.0, burst: 4, burstPause: 0.3, patience: 6.5, peekDur: 0.8, closeCombat: 1.0 },
-  insane:  { reaction: 0.09, aimSigma: 0.004, turn: 18.0, fov: 130, view: 95, speed: 5.6, coverBias: 0.95, strafe: 1.0, headAim: 0.7, hear: 1.0, burst: 5, burstPause: 0.25, patience: 7.0, peekDur: 0.7, closeCombat: 1.0 },
+  rookie:  { reaction: 1.00, aimSigma: 0.110, turn: 2.2,  fov: 90,  view: 30, speed: 3.6, coverBias: 0.05, strafe: 0.10, headAim: 0.00, hear: 0.25, hearR: 0.55, burst: 14, burstPause: 0.20, patience: 2.5, peekDur: 1.6, closeCombat: 0.2 },
+  chill:   { reaction: 0.85, aimSigma: 0.095, turn: 2.8,  fov: 95,  view: 34, speed: 3.8, coverBias: 0.10, strafe: 0.20, headAim: 0.01, hear: 0.32, hearR: 0.65, burst: 8,  burstPause: 0.80, patience: 3.0, peekDur: 1.5, closeCombat: 0.3 },
+  easy:    { reaction: 0.70, aimSigma: 0.080, turn: 3.0,  fov: 100, view: 38, speed: 4.0, coverBias: 0.15, strafe: 0.30, headAim: 0.02, hear: 0.40, hearR: 0.75, burst: 12, burstPause: 0.15, patience: 3.0, peekDur: 1.4, closeCombat: 0.4 },
+  medium:  { reaction: 0.38, aimSigma: 0.036, turn: 6.0,  fov: 110, view: 55, speed: 4.7, coverBias: 0.50, strafe: 0.60, headAim: 0.12, hear: 0.70, hearR: 0.9,  burst: 6,  burstPause: 0.28, patience: 4.5, peekDur: 1.1, closeCombat: 0.7 },
+  hard:    { reaction: 0.20, aimSigma: 0.015, turn: 11.0, fov: 120, view: 75, speed: 5.2, coverBias: 0.85, strafe: 0.95, headAim: 0.35, hear: 1.00, hearR: 1.0,  burst: 4,  burstPause: 0.34, patience: 6.0, peekDur: 0.9, closeCombat: 1.0 },
+  veteran: { reaction: 0.15, aimSigma: 0.011, turn: 13.0, fov: 125, view: 85, speed: 5.4, coverBias: 0.90, strafe: 1.00, headAim: 0.45, hear: 1.00, hearR: 1.1,  burst: 4,  burstPause: 0.30, patience: 6.5, peekDur: 0.85, closeCombat: 1.0 },
+  elite:   { reaction: 0.12, aimSigma: 0.008, turn: 15.0, fov: 130, view: 95, speed: 5.6, coverBias: 0.95, strafe: 1.00, headAim: 0.55, hear: 1.00, hearR: 1.25, burst: 3,  burstPause: 0.28, patience: 7.0, peekDur: 0.8, closeCombat: 1.0 },
+  insane:  { reaction: 0.09, aimSigma: 0.005, turn: 18.0, fov: 140, view: 110, speed: 5.9, coverBias: 1.00, strafe: 1.00, headAim: 0.70, hear: 1.00, hearR: 1.5, burst: 3,  burstPause: 0.24, patience: 8.0, peekDur: 0.7, closeCombat: 1.0 },
 };
 
 // rate = shots/s, spread = radians cone (half angle), range = effective metres, mag/reload in shots/s.
@@ -58,7 +66,7 @@ export const WEAPONS = {
 
 const RADIUS = 0.4;
 const PLANT_TIME = 3.2, DEFUSE_TIME = 5.0;
-let _uid = 0;
+let _uid = 0, _persona = 0;
 
 function mulberry32(a) { return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -190,7 +198,7 @@ export function findPath(g, ax, az, bx, bz) {
 
 // ------------------------------------------------------------------ bot creation
 export function createBot(o = {}) {
-  const difficulty = DIFFICULTY[o.difficulty] ? o.difficulty : 'medium';
+  const difficulty = DIFFICULTY[o.difficulty] ? o.difficulty : DEFAULT_DIFFICULTY;
   const id = o.id ?? ('bot' + (++_uid));
   let seed = o.seed; if (seed == null) { seed = 1234567; for (const ch of String(id)) seed = (seed * 31 + ch.charCodeAt(0)) | 0; }
   const bot = {
@@ -200,6 +208,7 @@ export function createBot(o = {}) {
     weapons: (o.weapons || ['pistol', 'machinegun', 'sniper']).slice(),
     rng: mulberry32(seed),
   };
+  Brain.initBot(bot, o.persona || Brain.PERSONA_ORDER[(_persona++) % 4]);
   resetBot(bot, bot);
   return bot;
 }
@@ -218,8 +227,9 @@ export function resetBot(bot, sp = {}) {
   bot.planting = 0; bot.defusing = 0; bot.stuckT = 0; bot.sidestep = 0; bot.strafeDir = 1; bot.strafeT = 0;
   bot.wp = null; bot.waitT = 0; bot.lookPhase = bot.rng() * 6.28; bot.hitT = -9; bot.firedAt = -9; bot.hold = null; bot.investT = 0;
   bot.lastX = bot.x; bot.lastZ = bot.z; bot.stuckCheck = 0;
+  Brain.resetBotBrain(bot);
 }
-export function newRound(world) { world._brain = null; }
+export function newRound(world) { world._brain = null; Brain.newRound(world); }
 
 export function damageBot(bot, dmg, fromX, fromZ, headshot = false) {
   if (!bot.alive) return false;
@@ -228,19 +238,34 @@ export function damageBot(bot, dmg, fromX, fromZ, headshot = false) {
   if (fromX != null && bot.d) {
     const e = 3.5 * (1.1 - Math.min(1, bot.d.hear * 0.7));
     bot.memory = { x: fromX + (bot.rng() - 0.5) * e, z: fromZ + (bot.rng() - 0.5) * e, t: bot._now || 0, src: 'hit' };
-    bot.hitReact = true;
+    bot.hitReact = true; bot._world = bot._world || null; Brain.noteHit(bot, fromX, fromZ);
   }
   return false;
 }
-export function emitSound(bots, x, z, radius, team) {
+// HEARING. kind: 'shot' (gunshots, default), 'step' (footsteps), 'bomb' (plant/defuse/beep). Chance to notice falls with
+// distance: p = hear * (1 - (d / (radius * hearR))^1.4); beyond radius*hearR nothing is heard. Louder = further.
+// The bot remembers the (blurred) spot, and the personality decides whether to turn, push, rotate, flank or ignore it.
+export function emitSound(bots, x, z, radius, team, kind = 'shot') {
   for (const b of bots) {
     if (!b.alive || b.team === team) continue;
-    const d = Math.hypot(b.x - x, b.z - z);
-    if (d > radius) continue;
-    if (b.rng() > b.d.hear) continue;
-    const e = 1 + d * 0.12;
-    if (!b.memory || b.memory.src !== 'seen' || (b._now || 0) - b.memory.t > 2) b.memory = { x: x + (b.rng() - 0.5) * e, z: z + (b.rng() - 0.5) * e, t: b._now || 0, src: 'heard' };
+    const d = Math.hypot(b.x - x, b.z - z), R = radius * (b.d.hearR || 1);
+    if (d > R) continue;
+    const p = b.d.hear * (1 - Math.pow(d / R, 1.4)) * (kind === 'step' ? 0.85 : 1);
+    if (b.rng() > p) continue;
+    const e = 1 + d * 0.12 * (kind === 'step' ? 1.4 : 1);
+    const now = b._now || 0, m = b.memory;
+    if (m && m.src === 'seen' && now - m.t < 2) continue;
+    if (m && m.src === 'heard' && now - m.t < 1.0 && Math.hypot(m.x - b.x, m.z - b.z) < d) continue; // already tracking a closer noise
+    b.memory = { x: x + (b.rng() - 0.5) * e, z: z + (b.rng() - 0.5) * e, t: now, src: 'heard', kind, d };
+    Brain.noteHeard(b, x, z, d, now);
+    if (b.state === 'idle' || b.state === 'hold' || b.state === 'check') b.hearT = now;
   }
+}
+// footsteps for a moving player/bot: call each frame with its ground speed (walk <= 2.5 m/s is silent)
+export function footstepNoise(bots, ent, speed, dt) {
+  if (speed < 3.0) { ent._stepT = 0; return; }
+  ent._stepT = (ent._stepT || 0) - dt;
+  if (ent._stepT <= 0) { ent._stepT = speed > 5.5 ? 0.3 : 0.45; emitSound(bots, ent.x, ent.z, 7 + speed * 2.2, ent.team, 'step'); }
 }
 
 // ------------------------------------------------------------------ helpers
@@ -335,13 +360,13 @@ function perceive(bot, bots, world, now) {
     let pick = vis[0];
     if (prev) { const same = vis.find((v) => v.e === prev.e); if (same && same.dist < pick.dist * 1.6) pick = same; }
     if (!prev || prev.e !== pick.e) {
-      if (bot.lostT > 1.0 || !prev || prev.e !== pick.e) { bot.reactT = d.reaction * (0.75 + bot.rng() * 0.5); bot.timeOnTarget = 0; bot.aimHead = bot.rng() < d.headAim; bot.engageStart = { x: bot.x, z: bot.z }; emit(world, bot, 'spot', { enemy: pick.e.id }); }
+      if (bot.lostT > 1.0 || !prev || prev.e !== pick.e) { bot.reactT = d.reaction * Brain.reactMul(bot, pick.e, pick.dist, now); bot.timeOnTarget = 0; bot.aimHead = bot.rng() < d.headAim; bot.engageStart = { x: bot.x, z: bot.z }; emit(world, bot, 'spot', { enemy: pick.e.id }); }
     }
     // speed estimate
     const pe = pick.e, tp = prev && prev.e === pe ? prev : null;
     pick.speed = tp && tp.dt ? 0 : 0;
     bot.target = { e: pe, dist: pick.dist, px: tp ? tp.x : pe.x, pz: tp ? tp.z : pe.z, x: pe.x, z: pe.z };
-    bot.lostT = 0;
+    bot.lostT = 0; Brain.noteSeen(bot, pe, now);
     bot.memory = { x: pe.x, z: pe.z, t: now, src: 'seen' };
   } else {
     bot.lostT += bot._dt;
@@ -379,14 +404,14 @@ function aimAndShoot(bot, bots, world, dt, now, moving) {
   if (bot.aimNoise.t <= 0) {
     const tspd = Math.hypot(e.x - (t.px ?? e.x), e.z - (t.pz ?? e.z)) / Math.max(dt, 0.001);
     const settle = 1 - 0.65 * Math.min(1, bot.timeOnTarget / 2.0);
-    const sig = d.aimSigma * settle * (1 + Math.min(1, (e._spd || 0) / 6) * 0.7) * (moving ? 1.35 : 1);
+    const sig = d.aimSigma * Brain.aimMul(bot, dist, moving, now) * settle * (1 + Math.min(1, (e._spd || 0) / 6) * 0.7) * (moving ? 1.35 : 1);
     bot.aimNoise.yaw = gauss(bot.rng) * sig; bot.aimNoise.pitch = gauss(bot.rng) * sig * 0.8; bot.aimNoise.t = 0.18 + bot.rng() * 0.1;
   }
   const aimY = (bot.aimHead && dist < 40) ? HEAD_Y - 0.06 : CHEST_Y;
   const ey = (e.y || 0) + aimY - (bot.y + EYE);
   const desYaw = yawTo(dx, dz) + bot.aimNoise.yaw;
   const desPitch = Math.atan2(ey, dist) + bot.aimNoise.pitch;
-  turnTo(bot, desYaw, d.turn * (bot.timeOnTarget < 0.3 ? 1 : 1.6), dt);
+  turnTo(bot, desYaw, d.turn * Brain.turnMul(bot) * (bot.timeOnTarget < 0.3 ? 1 : 1.6), dt);
   bot.pitch += clamp(desPitch - bot.pitch, -d.turn * dt, d.turn * dt);
   bot.timeOnTarget += dt;
   if (bot.reactT > 0) { bot.reactT -= dt; return; }
@@ -434,6 +459,7 @@ function findCover(bot, world, fromX, fromZ) {
   return best;
 }
 
+const HELP = { findPath, freeCircle, cxOf, czOf, solidAt, hasLOS, raycastGrid, yawTo, turnTo, angDiff, goTo };
 // ------------------------------------------------------------------ main per-bot think
 function tickBot(bot, bots, world, dt, now, brain) {
   bot._now = now; bot._dt = dt; bot._moved = false; bot._mvx = 0; bot._mvz = 0;
@@ -516,6 +542,7 @@ function tickBot(bot, bots, world, dt, now, brain) {
     bot.engageT = Math.max(0, bot.engageT - dt * 0.5);
     // ---------------- NON-COMBAT
     if (bot.hitReact) { bot.hitReact = false; bot.waitT = 0; bot.path = null; }
+    if (Brain.think(bot, bots, world, dt, now, brain, HELP, attack, bomb, planted)) { moving = bot._moved; } else {
     let mem = bot.memory;
     if (mem && mem.src === 'heard' && !attack && !planted && world.sites && world.sites.length) {
       // defenders hold their site: they face a noise but do not chase it far from their post
@@ -536,6 +563,7 @@ function tickBot(bot, bots, world, dt, now, brain) {
       objective(bot, bots, world, dt, now, brain, attack, bomb, planted);
       moving = bot._moved;
     }
+    }
   }
 
   // plant/defuse progress sanity
@@ -543,7 +571,7 @@ function tickBot(bot, bots, world, dt, now, brain) {
   if (bot.state !== 'defuse' && prevDefusing) bot.defusing = 0;
 
   // face movement direction when walking without a target
-  if (bot._moved && !bot.target && !bot.cover) {
+  if (bot._moved && !bot.target && !bot.cover && !(bot.H && bot.H.phase === 'peek')) {
     const l = Math.hypot(bot._mvx, bot._mvz);
     if (l > 0.01) turnTo(bot, yawTo(bot._mvx, bot._mvz), d.turn * 0.9, dt);
     bot.pitch += (0 - bot.pitch) * Math.min(1, dt * 4);
@@ -669,12 +697,26 @@ function patrol(bot, world, dt, now) {
   if (goTo(bot, world, bot.wp.x, bot.wp.z, dt, 0.8, 0.7)) { bot.waitT += dt; bot.yaw += Math.sin(now * 2) * dt; if (bot.waitT > 1.5) { bot.waitT = 0; bot.wp = null; } }
 }
 
+// automatic sounds: human footsteps (from position delta unless world.players[i]._spd is set), planted-bomb beeps, plant/defuse
+function autoSounds(bots, dt, world, brain) {
+  for (const p of world.players || []) {
+    if (p.alive === false) continue;
+    if (p._lx != null && dt > 0) { const sp = p._spd != null && p._spd > 0 ? p._spd : Math.hypot(p.x - p._lx, p.z - p._lz) / dt; footstepNoise(bots, p, Math.min(sp, 9), dt); }
+    p._lx = p.x; p._lz = p.z;
+  }
+  const bm = world.bomb;
+  if (bm && bm.state === 'planted') { brain.beepT = (brain.beepT || 0) - dt; if (brain.beepT <= 0) { brain.beepT = 1.0; emitSound(bots, bm.x, bm.z, 40, world.attackTeam || 'T', 'bomb'); } }
+  for (const b of bots) if (b.alive && (b.planting > 0 || b.defusing > 0)) { b._wt = (b._wt || 0) - dt; if (b._wt <= 0) { b._wt = 0.7; emitSound(bots, b.x, b.z, 18, b.team, 'bomb'); } }
+}
+
 // ------------------------------------------------------------------ public update
 export function update(bots, dt, world) {
   dt = Math.min(dt, 0.1);
   const rnd = world.rng || Math.random;
   const brain = brainOf(world, rnd);
   brain.t += dt;
+  autoSounds(bots, dt, world, brain);
+  for (const b of bots) b._world = world;
   // separation so bots don't stack
   for (const a of bots) {
     if (!a.alive) continue;

@@ -49,7 +49,7 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
   const stopConf = startConfetti(bg.querySelector('canvas'), { rain: 22, speed: .35 });
   const name = (() => { try { return localStorage.getItem('sc_name') || 'Player'; } catch (e) { return 'Player'; } })();
   const el = document.createElement('div'); el.className = 'mn';
-  const LV = ['chill', 'easy', 'medium', 'hard', 'veteran', 'insane'];
+  const LV = ['rookie','chill','easy','medium','hard','veteran','elite','insane'];
   const cycleDiff = () => { const i = (LV.indexOf(game.diff) + 1) % LV.length; game.diff = LV[i]; try { const s = JSON.parse(localStorage.getItem('sc_settings') || '{}'); s.diff = game.diff; localStorage.setItem('sc_settings', JSON.stringify(s)); } catch (e) {} if (game.set) game.set.diff = game.diff; const b = list.querySelector('.mn-i.dif'); if (b) b.innerHTML = 'Difficulty<em>' + game.diff + '</em>'; };
   const items = [
     { t: 'Play vs bots', a: () => game.start('bomb') },

@@ -141,8 +141,8 @@ export class Game {
     this.ov = document.createElement('div'); this.ov.className = 'ov'; root.appendChild(this.ov);
     this.kc = createKillCam(THREE, { scene: this.scene, camera: this.camera, renderer: this.renderer, root, raycast, colliders: this.world, getGround: (x, z) => m.getHeight(x, z), hideHud: (on) => { this.kcHide = on; this.hud.root.style.display = on || this.state === 'menu' ? 'none' : ''; this.info.style.visibility = this.kf.style.visibility = on ? 'hidden' : ''; } });
     this.fx = []; this.cineOK = false;
-    { const q = /[?&]diff=(easy|medium|hard|veteran|insane|chill)/.exec(location.search); this.diff = q ? q[1] : 'hard';
-      if (this.diff === 'chill') { Object.assign(DIFFICULTY.easy, { reaction: 0.95, aimSigma: 0.10, burst: 6, burstPause: 0.9, patience: 5 }); Object.assign(DIFFICULTY.medium, { reaction: 0.6, aimSigma: 0.06, burst: 4, burstPause: 0.7 }); } } this.state = 'menu'; this.mode = 'bomb'; this.locked = false; this.wasLocked = false;
+    { const q = /[?&]diff=(rookie|chill|easy|medium|hard|veteran|elite|insane)/.exec(location.search); this.diff = q ? q[1] : 'hard';
+      } this.state = 'menu'; this.mode = 'bomb'; this.locked = false; this.wasLocked = false;
     this.ctrl.setEnabled(false);
     this.bomb = { planted: false, pos: new THREE.Vector3(), t: 0, site: '', defuseT: 0, beepT: 0 };
     this.bombMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.35), new THREE.MeshLambertMaterial({ color: 0x222222, emissive: 0xff0000, emissiveIntensity: 0.7 }));
@@ -332,7 +332,7 @@ export class Game {
 <label class="sr"><span>FPS / ms counter</span><input type="checkbox" data-k="fps" ${s.fps ? 'checked' : ''}></label>
 <label class="sr"><span>Sensitivity <em data-v="sens">${s.sens.toFixed(2)}x</em></span><input type="range" min="0.3" max="2.5" step="0.05" value="${s.sens}" data-k="sens"></label>
 <label class="sr"><span>Volume <em data-v="vol">${Math.round(s.vol * 100)}%</em></span><input type="range" min="0" max="1" step="0.05" value="${s.vol}" data-k="vol"></label>
-<label class="sr"><span>Bot difficulty <small>(from next round)</small></span><select data-k="diff"><option value="chill">Chill</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="veteran">Veteran</option><option value="insane">Insane</option></select></label>
+<label class="sr"><span>Bot difficulty <small>(from next round)</small></span><select data-k="diff"><option value="rookie">Rookie</option><option value="chill">Chill</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="veteran">Veteran</option><option value="elite">Elite</option><option value="insane">Insane</option></select></label>
 <button class="b" data-close>Back</button></div>`;
     o.querySelector('select').value = s.diff;
     o.querySelectorAll('[data-k]').forEach((el) => { el.oninput = el.onchange = () => { const k = el.dataset.k; s[k] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : parseFloat(el.value); const v = o.querySelector(`[data-v="${k}"]`); if (v) v.textContent = k === 'sens' ? s.sens.toFixed(2) + 'x' : Math.round(s.vol * 100) + '%'; this.applySettings(); this.saveSettings(); }; });
@@ -442,7 +442,7 @@ export class Game {
     this.rng = mulberry(Number(new Date().toISOString().slice(0, 10).replace(/-/g, '')));
     if (mode === 'bomb') {
       const ct = this.map.spawnPoints.filter((s) => s.team === 'CT');
-      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff === 'chill' ? (i < 2 ? 'medium' : 'easy') : this.diff }));
+      ct.slice(0, 5).forEach((s, i) => this.bots.spawn(s.position, { defuser: i === 0, pro: true, difficulty: this.diff }));
     }
     this.hud.setHealth(100); this.hud.root.style.display = ''; this.ov.style.display = 'none'; this.state = 'play'; this.renderSB();
     this.ctrl.setEnabled(true); if (!this.eco.getState().menuOpen) this.ctrl.requestPointerLock(); play('ui_click'); startAmbient();
