@@ -1,34 +1,32 @@
 // menu.js - ChillOps main menu (Black Ops style layout): modes left, section content center, player right.
 import { logoHTML, startConfetti } from './intro.js';
 const CSS = `
-.mn{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;padding:clamp(10px,2.4vh,26px) clamp(14px,3vw,44px);font-family:Fredoka,system-ui,sans-serif;color:#fff;text-align:left;box-sizing:border-box}
-.mn-bg{position:absolute;inset:0;z-index:0;background:linear-gradient(160deg,#2f4f86,#5a4a9c 50%,#c4638f);overflow:hidden}.mn-bg canvas{position:absolute;inset:0;width:100%;height:100%}
-.mn-logo{font-size:clamp(30px,5.6vh,56px);line-height:1}.mn-logo .chl{font-size:inherit;-webkit-text-stroke:2px #2a3b55;gap:1px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.25))}.mn-logo .chl span{animation:none;opacity:1}
-.mn-body{flex:1;display:grid;grid-template-columns:minmax(210px,260px) 1fr minmax(220px,320px);gap:clamp(12px,2.4vw,34px);margin-top:clamp(10px,2.6vh,28px);min-height:0}
-.mn-left{display:flex;flex-direction:column;gap:8px}
-.mn-h{font-size:12px;font-weight:600;letter-spacing:.2em;opacity:.7;margin:10px 0 2px}.mn-h:first-child{margin-top:0}
-.mn-i{font:inherit;font-weight:600;font-size:18px;text-align:left;padding:12px 16px;border-radius:14px;border:2px solid rgba(255,255,255,.25);background:rgba(20,28,50,.45);color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;transition:transform .12s,background .12s}
-.mn-i small,.mn-i em{font-size:11px;font-style:normal;font-weight:500;opacity:.8;letter-spacing:.05em}
-.mn-i:hover:not(.lock){transform:translateX(6px);background:rgba(255,255,255,.18)}
-.mn-i.play{background:linear-gradient(#ffd166,#ffb43a);color:#2a2a2a;border-color:#fff;font-size:22px;padding:15px 16px;box-shadow:0 5px 0 rgba(0,0,0,.25)}
-.mn-i.sel{border-color:#ffd166;background:rgba(255,209,102,.22)}
-.mn-i.lock{opacity:.45;cursor:not-allowed}
-.mn-mid{min-width:0;overflow:auto;padding-right:6px}
-.mn-mid h3{margin:0 0 12px;font-size:24px}
-.mn-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-.mn-card{background:rgba(20,28,50,.55);border:2px solid rgba(255,255,255,.3);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:6px;animation:ch-fade .35s both}
-.mn-card svg{width:54px;height:54px;stroke:#ffd166;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-.mn-card b{font-size:18px}.mn-card .k{align-self:flex-start;background:#ffd166;color:#222;border-radius:10px;padding:2px 10px;font-weight:700;font-size:13px}
-.mn-card span{font-size:13px;opacity:.85;line-height:1.3}
-.mn-keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 18px}
-.mn-keys div{display:flex;align-items:center;gap:10px;font-size:15px}
-.mn-keys kbd{min-width:34px;text-align:center;background:#fff;color:#222;font:700 13px Fredoka,system-ui;padding:4px 8px;border-radius:8px;box-shadow:0 3px 0 rgba(0,0,0,.3)}
-.mn-tag{opacity:.85;font-size:clamp(15px,2.2vh,20px);margin-top:6px;line-height:1.4;max-width:420px}
-.mn-right{display:flex;flex-direction:column;align-items:center;min-height:0;background:rgba(20,28,50,.38);border:2px solid rgba(255,255,255,.22);border-radius:22px;padding:12px}
-.mn-right canvas{width:100%;flex:1;min-height:0}
-.mn-name{font-size:22px;font-weight:700}.mn-lvl{font-size:13px;opacity:.8;letter-spacing:.12em}
-.mn-xp{width:80%;height:8px;border-radius:6px;background:rgba(255,255,255,.2);margin-top:6px;overflow:hidden}.mn-xp i{display:block;height:100%;width:12%;background:#7dffb0}
-@media(max-width:760px){.mn-body{grid-template-columns:1fr}.mn-right{display:none}}
+.mn{position:absolute;inset:0;z-index:1;font-family:Fredoka,system-ui,sans-serif;color:#fff;text-align:left;box-sizing:border-box}
+.mn-bg{position:absolute;inset:0;z-index:0;background:radial-gradient(ellipse at 72% 45%,#2b3560 0%,#141a33 45%,#070a14 100%);overflow:hidden}
+.mn-bg canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.35;filter:blur(1.2px)}
+.mn-bg:after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(0,0,0,.65) 100%);pointer-events:none}
+.mn-char{position:absolute;right:0;top:0;bottom:0;width:62%;z-index:1;pointer-events:none}
+.mn-logo{position:absolute;left:clamp(20px,4vw,64px);top:clamp(14px,4vh,44px);font-size:clamp(46px,9vh,92px);line-height:1;z-index:3}
+.mn-logo .chl{font-size:inherit;-webkit-text-stroke:3px #2a3b55;filter:drop-shadow(0 4px 0 rgba(0,0,0,.35))}.mn-logo .chl span{animation:none;opacity:1}
+.mn-list{position:absolute;left:clamp(20px,4vw,64px);top:clamp(130px,26vh,240px);z-index:3;display:flex;flex-direction:column;gap:2px}
+.mn-i{font:inherit;font-weight:500;font-size:clamp(15px,2.6vh,22px);letter-spacing:.14em;text-transform:uppercase;text-align:left;padding:7px 36px 7px 12px;border:0;background:transparent;color:#cfd6ea;cursor:pointer;min-width:210px;transition:padding .12s,background .12s;border-left:3px solid transparent}
+.mn-i em{font-style:normal;font-size:.55em;opacity:.6;margin-left:8px;letter-spacing:.1em}
+.mn-i.act{background:linear-gradient(90deg,#ff8a2a,#ff6a1a 70%,rgba(255,106,26,0));color:#fff;padding-left:20px;border-left-color:#ffd166;text-shadow:0 1px 6px rgba(0,0,0,.4)}
+.mn-i.lock{opacity:.4;cursor:default}
+.mn-gap{height:14px}
+.mn-pan{position:absolute;left:clamp(260px,26vw,420px);top:clamp(130px,26vh,240px);right:34%;z-index:3;max-height:62vh;overflow:auto;padding:0 14px}
+.mn-pan h3{margin:0 0 10px;font-weight:500;font-size:14px;letter-spacing:.25em;color:#ff9a4a}
+.mn-row{display:grid;grid-template-columns:28px 1fr;gap:2px 14px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.12);animation:ch-fade .3s both}
+.mn-row svg{grid-row:span 2;width:26px;height:26px;stroke:#ffd166;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.mn-row b{font-weight:600;font-size:15px;letter-spacing:.08em;text-transform:uppercase}.mn-row b i{font-style:normal;color:#ff9a4a;margin-left:10px;font-size:12px;letter-spacing:.1em}
+.mn-row span{font-size:12.5px;opacity:.7;line-height:1.35}
+.mn-keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 22px}.mn-keys div{display:flex;gap:10px;align-items:center;font-size:13px;opacity:.9}
+.mn-keys kbd{min-width:44px;text-align:center;border:1px solid rgba(255,255,255,.45);border-radius:5px;font:600 11px Fredoka,system-ui;padding:2px 6px}
+.mn-who{position:absolute;right:clamp(20px,4vw,60px);bottom:clamp(50px,9vh,80px);z-index:3;text-align:right;text-shadow:0 2px 8px #000}
+.mn-name{font-size:24px;font-weight:600;letter-spacing:.1em}.mn-lvl{font-size:12px;letter-spacing:.2em;opacity:.7}
+.mn-bar{position:absolute;left:0;right:0;bottom:0;height:38px;z-index:3;display:flex;gap:26px;align-items:center;padding:0 clamp(20px,4vw,64px);background:linear-gradient(transparent,rgba(0,0,0,.6));font-size:12px;letter-spacing:.12em;opacity:.85}
+.mn-bar kbd{border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:1px 7px;margin-right:7px;font:600 11px Fredoka,system-ui}
+@media(max-width:760px){.mn-char{width:100%;opacity:.35}.mn-pan{right:14px;left:14px;top:62%}}
 `;
 const ICONS = {
   uav: '<svg viewBox="0 0 54 54"><circle cx="27" cy="27" r="6"/><path d="M14 27a13 13 0 0 1 13-13M8 27A19 19 0 0 1 27 8M40 27a13 13 0 0 1-13 13M46 27a19 19 0 0 1-19 19"/></svg>',
@@ -46,43 +44,43 @@ export const STREAK_INFO = [
 export function buildMenu(game, THREE, createCharacter, ROSTER) {
   if (!document.getElementById('mn-css')) { const s = document.createElement('style'); s.id = 'mn-css'; s.textContent = CSS; document.head.appendChild(s); }
   const ov = game.ov, bg = document.createElement('div'); bg.className = 'mn-bg'; bg.innerHTML = '<canvas></canvas>'; ov.appendChild(bg);
-  const stopConf = startConfetti(bg.querySelector('canvas'), { rain: 14, speed: .6 });
+  const stopConf = startConfetti(bg.querySelector('canvas'), { rain: 22, speed: .35 });
   const name = (() => { try { return localStorage.getItem('sc_name') || 'Jugador'; } catch (e) { return 'Jugador'; } })();
   const el = document.createElement('div'); el.className = 'mn';
-  el.innerHTML = `<div class="mn-logo"><div class="chl">${logoHTML()}</div></div>
-<div class="mn-body"><nav class="mn-left">
-<div class="mn-h">MODOS</div>
-<button class="mn-i play" data-a="play">Contra bots <small>MEJOR DE 5</small></button>
-<button class="mn-i lock" disabled>1v1 <em>PRÓXIMAMENTE</em></button>
-<button class="mn-i lock" disabled>2v2 <em>PRÓXIMAMENTE</em></button>
-<div class="mn-h">MÁS</div>
-<button class="mn-i" data-p="streaks">Rachas</button>
-<button class="mn-i" data-p="help">Ayuda</button>
-<button class="mn-i" data-a="settings">Ajustes</button></nav>
-<section class="mn-mid"><div class="mn-tag">Chill. Apunta. Disfruta.<br>Elige un modo y a jugar.</div></section>
-<aside class="mn-right"><canvas></canvas><div class="mn-name">${name}</div><div class="mn-lvl">NIVEL 1</div><div class="mn-xp"><i></i></div></aside></div>`;
+  const items = [
+    { t: 'Jugar contra bots', a: () => game.start('bomb') },
+    { t: '1v1', lock: 'pronto' }, { t: '2v2', lock: 'pronto' }, { gap: 1 },
+    { t: 'Rachas', p: 'streaks' }, { t: 'Ayuda', p: 'help' }, { t: 'Ajustes', a: () => game.openSettings() },
+  ];
+  el.innerHTML = `<div class="mn-char"><canvas style="width:100%;height:100%"></canvas></div><div class="mn-logo"><div class="chl">${logoHTML()}</div></div><div class="mn-list"></div><div class="mn-pan"></div>
+<div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">NIVEL 1</div></div>
+<div class="mn-bar"><span><kbd>↑↓</kbd>Elegir</span><span><kbd>Enter</kbd>Seleccionar</span><span><kbd>Esc</kbd>Atrás</span></div>`;
   ov.appendChild(el);
-  const mid = el.querySelector('.mn-mid');
+  const list = el.querySelector('.mn-list'), pan = el.querySelector('.mn-pan'); let sel = 0; const btns = [];
   const panels = {
-    streaks: () => `<h3>Rachas</h3><div class="mn-cards">${STREAK_INFO.map((s, i) => `<div class="mn-card" style="animation-delay:${i * 70}ms">${ICONS[s.id]}<b>${s.name}</b><div class="k">${s.at} bajas · tecla ${s.key}</div><span>${s.desc}</span></div>`).join('')}</div><p class="mn-tag" style="font-size:14px">Pulsa <b>G</b> para usar la primera disponible. Si mueres, pierdes la racha; si sobrevives la ronda, se conserva.</p>`,
-    help: () => `<h3>Controles</h3><div class="mn-keys">${[['WASD', 'Moverte'], ['Ratón', 'Apuntar'], ['Clic', 'Disparar / cuchillo'], ['Clic dcho', 'Mirilla (toggle)'], ['Shift', 'Agacharte'], ['Espacio', 'Saltar'], ['R', 'Recargar'], ['E', 'Recoger arma / plantar'], ['B', 'Tienda'], ['1 2 3', 'Principal / pistola / cuchillo'], ['V H J', 'Frag / humo / flash'], ['G', 'Usar racha'], ['Esc', 'Pausa']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
+    streaks: () => `<h3>RACHAS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} BAJAS · TECLA ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G usa la primera. Si mueres la pierdes; si sobrevives la ronda se conserva.</p>`,
+    help: () => `<h3>CONTROLES</h3><div class="mn-keys">${[['WASD', 'Moverte'], ['Ratón', 'Apuntar'], ['Clic', 'Disparar'], ['Clic dcho', 'Mirilla'], ['Shift', 'Agacharte'], ['Espacio', 'Saltar'], ['R', 'Recargar'], ['E', 'Recoger / plantar'], ['B', 'Tienda'], ['1 2 3', 'Armas / cuchillo'], ['V H J', 'Granadas'], ['G', 'Usar racha'], ['Esc', 'Pausa']].map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div>`,
   };
-  const open = (p) => { mid.innerHTML = panels[p](); el.querySelectorAll('[data-p]').forEach((b) => b.classList.toggle('sel', b.dataset.p === p)); };
-  el.querySelectorAll('[data-p]').forEach((b) => { b.onclick = () => open(b.dataset.p); });
-  el.querySelector('[data-a=play]').onclick = () => game.start('bomb');
-  el.querySelector('[data-a=settings]').onclick = () => game.openSettings();
+  const show = () => { const it = items[sel]; pan.innerHTML = it.p ? panels[it.p]() : ''; };
+  const setSel = (i) => { if (items[i].gap) return; sel = i; btns.forEach((b, k) => b && b.classList.toggle('act', k === i)); show(); };
+  items.forEach((it, i) => { if (it.gap) { const d = document.createElement('div'); d.className = 'mn-gap'; list.appendChild(d); btns.push(null); return; }
+    const b = document.createElement('button'); b.className = 'mn-i' + (it.lock ? ' lock' : ''); b.innerHTML = it.t + (it.lock ? `<em>${it.lock}</em>` : ''); b.onmouseenter = () => setSel(i); b.onclick = () => { setSel(i); if (it.a) it.a(); }; list.appendChild(b); btns.push(b); });
+  setSel(0);
+  const onKey = (e) => { if (game.state !== 'menu' || game.setOv.style.display !== 'none') return; const dir = e.code === 'ArrowDown' ? 1 : e.code === 'ArrowUp' ? -1 : 0;
+    if (dir) { let i = sel; do { i = (i + dir + items.length) % items.length; } while (items[i].gap); setSel(i); e.preventDefault(); } else if (e.code === 'Enter') { const it = items[sel]; if (it.a) it.a(); } else if (e.code === 'Escape') setSel(0); };
+  addEventListener('keydown', onKey);
   // animated character (own tiny renderer)
   let run = true, rend = null, cleanup = () => {};
   try {
-    const cv = el.querySelector('.mn-right canvas'); rend = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); rend.setClearColor(0, 0);
+    const cv = el.querySelector('.mn-char canvas'); rend = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); rend.setClearColor(0, 0);
     const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-    sc.add(new THREE.AmbientLight(0xffffff, 1.1)); const dl = new THREE.DirectionalLight(0xffffff, 1.3); dl.position.set(2, 4, 3); sc.add(dl);
-    const ch = createCharacter(THREE, { id: ROSTER[0].id, team: 'CT', weapon: 'pistol' }); sc.add(ch.group); cam.position.set(0, 1.15, 4.2); cam.lookAt(0, 0.95, 0);
+    sc.add(new THREE.AmbientLight(0x8890c0, 0.9)); const dl = new THREE.DirectionalLight(0xffe2c0, 1.0); dl.position.set(2, 3, 4); sc.add(dl); const rim = new THREE.DirectionalLight(0xff8a2a, 2.6); rim.position.set(-3, 2.5, -3); sc.add(rim); const rim2 = new THREE.DirectionalLight(0x6fb6ff, 2.2); rim2.position.set(3, 2, -3); sc.add(rim2);
+    const ch = createCharacter(THREE, { id: ROSTER[0].id, team: 'CT', weapon: 'pistol' }); sc.add(ch.group); cam.position.set(0, 1.15, 4.0); cam.lookAt(0, 0.9, 0); ch.group.position.set(0.1, 0, 0);
     let last = performance.now(), t = 0;
     const loop = (now) => { if (!run) return; requestAnimationFrame(loop); const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
       const w = cv.clientWidth, h = cv.clientHeight; if (w && (cv.width !== w || cv.height !== h)) { rend.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
-      ch.group.rotation.y = Math.sin(t * 0.7) * 0.6 - 0.2; ch.update(dt, { speed: 0, alive: true, weapon: 'pistol', team: 'CT', distance: 4 }); rend.render(sc, cam); };
+      ch.group.rotation.y = Math.PI + Math.sin(t * 0.35) * 0.3 - 0.35; ch.update(dt, { speed: 0, alive: true, weapon: 'pistol', team: 'CT', distance: 4 }); rend.render(sc, cam); };
     requestAnimationFrame(loop);
   } catch (e) { /* no WebGL: panel stays empty */ }
-  return () => { run = false; stopConf(); try { rend && rend.dispose(); } catch (e) {} bg.remove(); el.remove(); };
+  return () => { run = false; removeEventListener('keydown', onKey); stopConf(); try { rend && rend.dispose(); } catch (e) {} bg.remove(); el.remove(); };
 }

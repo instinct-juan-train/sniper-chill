@@ -293,8 +293,15 @@ export class Game {
     if (!this.zoneMesh) {
       const gp = new THREE.Group(); const fill = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), new THREE.MeshBasicMaterial({ color: 0x7affc4, transparent: true, opacity: 0.18, depthWrite: false })); fill.rotation.x = -Math.PI / 2; gp.add(fill);
       const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-2.5, 0, -2.5), new THREE.Vector3(2.5, 0, -2.5), new THREE.Vector3(2.5, 0, 2.5), new THREE.Vector3(-2.5, 0, 2.5)]), new THREE.LineBasicMaterial({ color: 0xffffff })); gp.add(edge);
+      const wm = new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); this.barMat = wm;
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const cx = cv.getContext('2d'); cx.fillStyle = 'rgba(160,220,255,.45)'; cx.fillRect(0, 0, 64, 64); cx.strokeStyle = 'rgba(255,255,255,.95)'; cx.lineWidth = 4; cx.strokeRect(0, 0, 64, 64); cx.beginPath(); cx.moveTo(0, 64); cx.lineTo(64, 0); cx.stroke();
+      const tx = new THREE.CanvasTexture(cv); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(5, 2.5); wm.map = tx; wm.color.set(0xd6f0ff);
+      this.barrier = new THREE.Group();
+      for (const [x, z, ry] of [[0, -2.5, 0], [0, 2.5, 0], [-2.5, 0, Math.PI / 2], [2.5, 0, Math.PI / 2]]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), wm); w.position.set(x, 1.25, z); w.rotation.y = ry; this.barrier.add(w); }
+      const rail = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-2.5, 2.5, -2.5), new THREE.Vector3(2.5, 2.5, -2.5), new THREE.Vector3(2.5, 2.5, 2.5), new THREE.Vector3(-2.5, 2.5, 2.5)]), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true })); this.barRail = rail; this.barrier.add(rail); gp.add(this.barrier);
       this.zoneMesh = gp; this.scene.add(gp);
     }
+    this.barA = 1;
     this.zoneMesh.position.set(sp.x, sp.y + 0.05, sp.z); this.drops = this.drops || [];
     for (const d of this.drops) this.scene.remove(d.mesh); this.drops = [];
   }
@@ -345,6 +352,7 @@ export class Game {
     if (newMatch) { this.newEconomy(); this.match = { p: 0, b: 0, round: 1, over: false }; this.endMatchEffects('m' + Date.now()); }
     this.grenades.clearRound();
     if (cont && this.match.round < 5) this.match.round++;
+    if (this.blastFx) { this.scene.remove(this.blastFx.grp); this.blastFx = null; } this.blasting = false; this.shake = 0;
     this.unKnife(); this.mode = mode; this.killfx.reset(); if (cont && !newMatch) this.streaks.cancel('round'); else this.streaks.reset(); this.streaks.show(true); this.kc.clear(); this.bots.clear(); this.player.reset(); this.ws.refill(); this.ws.select(0); this.owned = new Set(['pistol']); this.eco.startRound({ team: 'T', freezeTime: 10, autoOpen: false }); this.setZone(); { const inv = this.eco.getState().inventory; for (const id of [inv.primary, inv.secondary]) if (id) this.owned.add(id); if (inv.primary) { this.ws.ammo[inv.primary].mag = inv.ammo[inv.primary].mag; this.ws.ammo[inv.primary].reserve = inv.ammo[inv.primary].reserve; this.ws.select(inv.primary); } else this.ws.select(inv.secondary || 'pistol'); }
     this.ctrl.teleport({ x: this.spawnT.x, y: this.spawnT.y, z: this.spawnT.z }, { yaw: 0, pitch: 0 });
     this.bomb.planted = false; this.bombMesh.visible = false; this.plantT = 0; this.eDown = false;
@@ -401,8 +409,37 @@ export class Game {
       this.kc.config.gate = () => this.cineOK; this.kc.shoot({ muzzle, end, weapon: s.weapon, hit: kh });
     }
   }
+  updateBarrier(dt) {
+    if (!this.barrier) return; const fr = this.eco.getState().phase === 'freeze'; this.barA += ((fr ? 1 : 0) - this.barA) * Math.min(1, dt * 2.2);
+    const pulse = 0.82 + Math.sin(performance.now() / 350) * 0.18; this.barMat.opacity = 0.6 * this.barA * pulse; this.barRail.material.opacity = this.barA; this.barrier.visible = this.barA > 0.02;
+    if (this.barMat.map) this.barMat.map.offset.y = (performance.now() / 4000) % 1;
+  }
+  startBlast(pos) {
+    const P = { x: pos.x, y: pos.y, z: pos.z }, grp = new THREE.Group(); grp.position.set(P.x, P.y, P.z);
+    const mk = (geo, color, op) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false }));
+    const sph = mk(new THREE.IcosahedronGeometry(1, 2), 0xff8a2a, 0.9), core = mk(new THREE.IcosahedronGeometry(1, 2), 0xfff3b0, 1), ring = mk(new THREE.TorusGeometry(1, 0.08, 6, 48), 0xffffff, 0.9), ring2 = mk(new THREE.TorusGeometry(1, 0.05, 6, 48), 0xffd166, 0.8);
+    ring.rotation.x = ring2.rotation.x = Math.PI / 2; ring.position.y = ring2.position.y = 0.3; grp.add(sph, core, ring, ring2);
+    const cols = [0xffd166, 0xff8a5c, 0xff9ac8, 0x9ad1ff, 0xffffff, 0x7dffb0], deb = [];
+    for (let i = 0; i < 70; i++) { const m = mk(new THREE.BoxGeometry(0.25 + Math.random() * 0.4, 0.25 + Math.random() * 0.4, 0.25 + Math.random() * 0.4), cols[i % cols.length], 1); m.material.depthWrite = true; const a = Math.random() * 6.28, v = 6 + Math.random() * 16; m.position.set(0, 0.5, 0); grp.add(m); deb.push({ m, vx: Math.cos(a) * v, vy: 8 + Math.random() * 16, vz: Math.sin(a) * v, rx: (Math.random() - .5) * 12, rz: (Math.random() - .5) * 12 }); }
+    const light = new THREE.PointLight(0xffa04a, 12, 60, 1.5); light.position.y = 3; grp.add(light);
+    this.scene.add(grp); this.blastFx = { t: 0, grp, sph, core, ring, ring2, deb, light, P }; this.shake = 1.4;
+    try { this.destruction.damage(P, 14, 600, { source: 'bomb' }); } catch (e) {}
+    const R = 14; for (const b of this.bots.list) { if (!b.alive) continue; if (Math.hypot(b.position.x - P.x, b.position.z - P.z) < R && Math.abs(b.position.y - P.y) < 8) { this.bots.damage(b, 0, false); const bw = (b.ch && b.ch.weapon) || 'machinegun'; this.addDrop({ dropId: 'bomb-' + b.id + '-' + Date.now(), weapon: bw, ammo: { mag: 12, reserve: 24 }, position: { x: b.position.x + (Math.random() - .5) * 3, y: b.position.y, z: b.position.z + (Math.random() - .5) * 3 } }); } }
+    const pp = this.ctrl.state.position, dd = Math.hypot(pp.x - P.x, pp.z - P.z), killedMe = dd < R && Math.abs(pp.y - P.y) < 8;
+    if (killedMe) { const inv = this.eco.getState().inventory; if (inv.primary) this.addDrop({ dropId: 'bomb-me-' + Date.now(), weapon: inv.primary, ammo: { mag: 12, reserve: 24 }, position: { x: pp.x + 1.2, y: pp.y, z: pp.z } }); this.player.damage(999); try { this.streaks.registerDeath(); } catch (e) {} this.hud.damageFlash(); }
+    this.blasting = true; this.blastEndT = 2.1; this.blastResult = killedMe ? [false, 'La bomba te alcanzó. Aléjate más antes de que explote.'] : [true, 'La bomba explotó. ¡Ganas la ronda!']; this.bomb.t = 1e9;
+    play('bomb_explode');
+  }
+  updateBlast(dt) {
+    const f = this.blastFx; if (f) { f.t += dt; const t = f.t, e = Math.min(1, t / 0.7);
+      f.sph.scale.setScalar(1 + e * 11); f.sph.material.opacity = Math.max(0, 0.9 - t * 0.55); f.core.scale.setScalar(1 + e * 6); f.core.material.opacity = Math.max(0, 1 - t * 1.6);
+      f.ring.scale.setScalar(1 + t * 20); f.ring.material.opacity = Math.max(0, 0.9 - t * 0.6); f.ring2.scale.setScalar(1 + t * 13); f.ring2.material.opacity = Math.max(0, 0.8 - t * 0.5); f.light.intensity = Math.max(0, 12 - t * 8);
+      for (const d of f.deb) { d.vy -= 24 * dt; d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt; if (d.m.position.y < 0.1) { d.m.position.y = 0.1; d.vy *= -0.3; d.vx *= 0.6; d.vz *= 0.6; } d.m.rotation.x += d.rx * dt; d.m.rotation.z += d.rz * dt; d.m.material.opacity = Math.max(0, 1 - Math.max(0, t - 1.2) * 1.2); }
+      if (t > 3) { this.scene.remove(f.grp); this.blastFx = null; } }
+    if (this.blasting) { this.blastEndT -= dt; if (this.blastEndT <= 0) { this.blasting = false; const r = this.blastResult; this.end(r[0], r[1]); } }
+  }
   update(dt) {
-    const c = this.ctrl, st = c.state; this.updateKnife(dt); this.invb.style.display = this.state === 'play' && !this.kcHide ? 'flex' : 'none'; this.renderInv();
+    const c = this.ctrl, st = c.state; this.updateBarrier(dt); this.updateKnife(dt); this.invb.style.display = this.state === 'play' && !this.kcHide ? 'flex' : 'none'; this.renderInv();
     const es = this.eco.getState(); this.eco.update(dt);
     this.updateDrops(dt);
     if (es.menuOpen) {
@@ -464,13 +501,12 @@ export class Game {
       if (this.bomb.planted) {
         this.bomb.t -= dt; this.bomb.beepT -= dt;
         if (this.bomb.beepT <= 0) { play('bomb_beep', this.bomb.pos); this.bomb.beepT = this.bomb.t < 10 ? 0.35 : 1; }
-        hint = `BOMBA ${this.bomb.site} · ${fmt(Math.max(0, this.bomb.t))}`;
+        hint = this.blasting ? '¡BOOM!' : `BOMBA ${this.bomb.site} · ${fmt(Math.max(0, this.bomb.t))}`;
         if (this.bomb.t <= 0) {
-          play('bomb_explode'); const d = Math.hypot(st.position.x - this.bomb.pos.x, st.position.z - this.bomb.pos.z);
-          if (d < 14) { this.hud.damageFlash(); this.end(false, 'La bomba te alcanzó. Aléjate más antes de que explote.'); } else this.end(true, 'La bomba explotó. ¡Ganas la ronda!');
+          if (!this.blasting) this.startBlast(this.bomb.pos);
         }
       } else { this.roundT -= dt; if (this.roundT <= 0) { this.end(false, 'Se acabó el tiempo sin plantar la bomba.'); return; } }
-      if (this.bots.aliveCount() === 0) { this.end(true, 'Eliminaste a todos los bots.'); return; }
+      if (this.bots.aliveCount() === 0 && !this.blasting) { this.end(true, 'Eliminaste a todos los bots.'); return; }
       this.info.textContent = `${hint}${this.bomb.planted ? '' : ' · ' + fmt(this.roundT)} · Bots ${this.bots.aliveCount()}`;
       this.hud.setBombText('');
     } else {
@@ -493,11 +529,13 @@ export class Game {
     { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')'; p.n = 0; p.t = 0; p.worst = 0; } }
     const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
     const dt = real * this.kc.update(real) * this.killfx.update(real);
+    this.updateBlast(dt);
     if (this.pendEnd && !this.kc.active) { const p = this.pendEnd; this.pendEnd = null; this.end(p[0], p[1]); }
     for (let i = this.fx.length - 1; i >= 0; i--) { const f = this.fx[i]; f.t -= dt; f.l.material.opacity = Math.max(0, f.t / f.life); if (f.t <= 0) { this.scene.remove(f.l); f.l.geometry.dispose(); f.l.material.dispose(); this.fx.splice(i, 1); } }
     if (this.state === 'play') { this.destruction.update(dt); const es = this.eco.getState(); if (es.phase === 'live' && !es.menuOpen) this.grenades.update(dt); this.update(dt); }
     else if (this.state !== 'pause') { this.bots.update(dt * (this.state === 'over' ? 1 : 0), { playerEye: this.ctrl.state.eye, playerAlive: false, bomb: null }); this.ctrl.applyToCamera(this.camera); this.anim.update(dt, { bots: [] }); }
     this.kc.applyCamera(); this.killfx.applyCamera(this.camera);
+    if (this.shake > 0.01) { const s = this.shake; this.camera.position.x += (Math.random() - .5) * 0.5 * s; this.camera.position.y += (Math.random() - .5) * 0.5 * s; this.camera.rotation.z += (Math.random() - .5) * 0.05 * s; this.shake *= Math.pow(0.02, dt); }
     if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
     this.kc.afterRender();
   }
