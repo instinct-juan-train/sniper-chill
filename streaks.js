@@ -34,9 +34,9 @@ const CSS = `
 .sk .tab .th.l{left:-16px;transform:rotate(18deg)}.sk .tab .th.r{right:-16px;transform:rotate(-18deg)}
 
 .sk{position:absolute;inset:0;pointer-events:none;z-index:22;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none}
-.sk .tray{position:absolute;right:14px;top:84px;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
-.sk .slot{position:relative;overflow:hidden;width:46px;height:46px;border-radius:10px;background:rgba(10,14,30,.62);border:2px solid rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
-.sk .slot svg{width:26px;height:26px;position:relative;z-index:1;opacity:.55;filter:drop-shadow(0 2px 0 rgba(0,0,0,.5))}
+.sk .tray{position:absolute;right:14px;top:14vh;display:flex;flex-direction:column;gap:1vh;align-items:flex-end}
+.sk .slot{position:relative;overflow:hidden;width:min(46px,6.6vh);height:min(46px,6.6vh);border-radius:10px;background:rgba(10,14,30,.62);border:2px solid rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;text-shadow:0 2px 0 rgba(0,0,0,.45);transition:transform .15s,background .2s,border-color .2s}
+.sk .slot svg{width:60%;height:60%;position:relative;z-index:1;opacity:.55;filter:drop-shadow(0 2px 0 rgba(0,0,0,.5))}
 .sk .slot .k{position:absolute;top:1px;left:1px;z-index:2;background:rgba(0,0,0,.55);color:#fff;border-radius:5px;padding:0 4px;font-size:10px;font-weight:800;line-height:14px;text-shadow:none}
 .sk .slot .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(255,209,102,.42);transition:height .35s}
 .sk .slot .t{position:relative;z-index:1;font-size:9px;font-weight:700;letter-spacing:.03em;opacity:1;margin-top:1px}

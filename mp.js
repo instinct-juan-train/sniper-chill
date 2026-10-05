@@ -46,13 +46,17 @@ export function createMultiplayer(game, THREE) {
     const s = show(`<h2>MULTIPLAYER</h2><p>Bomb mode. Plant or defuse, first to 5 rounds.</p>
 <label>YOUR NAME</label><input id="mpn" maxlength="14" value="${esc(getName())}" placeholder="Player">
 <label>MODE</label><div class="mp-row" style="margin-top:0"><button class="mp-btn" id="m1">1v1</button><button class="mp-btn alt" id="m2">2v2</button></div>
-<div class="mp-row"><button class="mp-btn" id="mpc">CREATE ROOM</button></div>
+<div class="mp-row"><button class="mp-btn" id="mpf">FIND MATCH</button><button class="mp-btn alt" id="mpc">CREATE PRIVATE ROOM</button></div>
+<label>OPEN GAMES <a id="mpr" style="cursor:pointer;opacity:.8">refresh</a></label><div id="mpl" style="max-height:110px;overflow:auto;font-size:14px;opacity:.9">Loading...</div>
 <label>OR JOIN WITH A CODE</label><div class="mp-row" style="margin-top:0"><input id="mpj" maxlength="8" placeholder="CODE" style="text-transform:uppercase"><button class="mp-btn alt" id="mpg" style="flex:0 0 90px">JOIN</button></div>
 <div class="mp-row"><button class="mp-btn alt" id="mpb">BACK</button></div>`);
     const q = (i) => s.querySelector('#' + i), nm = () => (q('mpn').value.trim() || 'Player').slice(0, 14);
     const setMode = (m) => { mode = m; q('m1').classList.toggle('alt', m !== '1v1'); q('m2').classList.toggle('alt', m !== '2v2'); };
     setMode(mode);
     q('m1').onclick = () => setMode('1v1'); q('m2').onclick = () => setMode('2v2');
+    q('mpf').onclick = () => { setName(nm()); connect({ room: 'MATCH', name: nm() }); };
+    const loadList = async () => { const l = q('mpl'); try { const c = new AbortController(); setTimeout(() => c.abort(), 4000); const r = await (await fetch(HEALTH.replace('/healthz', '/rooms'), { cache: 'no-store', signal: c.signal })).json(); l.innerHTML = r.length ? r.map((g) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0"><span>${g.mode.toUpperCase()} - ${g.players}/${g.max} - ${esc(g.phase)}</span><button class="mp-btn alt" style="flex:0 0 64px;padding:4px" data-c="${esc(g.code)}" ${g.full ? 'disabled' : ''}>${g.full ? 'FULL' : 'JOIN'}</button></div>`).join('') : 'No open games right now. Hit FIND MATCH to start one.'; l.querySelectorAll('button[data-c]').forEach((b) => { b.onclick = () => { setName(nm()); connect({ room: b.dataset.c, name: nm() }); }; }); } catch (e) { l.textContent = 'Server is asleep or unreachable. FIND MATCH will wake it up.'; } };
+    q('mpr').onclick = loadList; loadList();
     q('mpc').onclick = () => { setName(nm()); connect({ room: 'new', name: nm() }); };
     q('mpg').onclick = () => { const c = q('mpj').value.trim().toUpperCase(); if (!c) return q('mpj').focus(); setName(nm()); connect({ room: c, name: nm() }); };
     q('mpb').onclick = () => { clear(); game.showMenu && game.showMenu(); };
@@ -79,7 +83,7 @@ export function createMultiplayer(game, THREE) {
 
   function open(p) {
     show(`<div class="mp-c"><div class="mp-spin"></div><h2 style="font-size:22px">Connecting...</h2></div>`);
-    const url = WS + '?room=' + encodeURIComponent(p.room) + '&name=' + encodeURIComponent(p.name) + (p.room === 'new' ? '&mode=' + mode : '');
+    const url = WS + '?room=' + encodeURIComponent(p.room) + '&name=' + encodeURIComponent(p.name) + (p.room === 'new' || p.room === 'MATCH' ? '&mode=' + mode : '');
     const net = new NetClient({ createController, colliders: game.phys, url });
     mp.net = net; let welcomed = false, tries = 0;
     net.on('welcome', (w) => { welcomed = true; if (!mp.active) begin(w); else banner('Reconnected', 1.5); try { history.replaceState(0, '', '?room=' + w.room); } catch (e) {} });
