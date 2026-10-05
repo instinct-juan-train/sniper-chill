@@ -60,6 +60,9 @@ export function buildMenu(game, THREE, createCharacter, ROSTER) {
 <div class="mn-who"><div class="mn-name">${name}</div><div class="mn-lvl">LEVEL 1</div></div>
 <div class="mn-bar"><span><kbd>↑↓</kbd>Navigate</span><span><kbd>Enter</kbd>Select</span><span><kbd>Esc</kbd>Back</span></div>`;
   ov.appendChild(el);
+  { const bd = document.createElement('div'); bd.style.cssText = 'position:absolute;left:clamp(20px,4vw,64px);top:clamp(96px,19vh,176px);z-index:3;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#9aa6c8;opacity:0;transition:opacity .4s'; el.appendChild(bd);
+    const load = async () => { try { const c = new AbortController(); const to = setTimeout(() => c.abort(), 70000); const r = await (await fetch('https://sniper-chill-mp.onrender.com/stats', { cache: 'no-store', signal: c.signal })).json(); clearTimeout(to); bd.innerHTML = '<span style="color:#52f0a0">●</span> ' + r.players + ' playing now'; bd.style.opacity = 1; } catch (e) {} };
+    if (!/[?&]nostats/.test(location.search)) load(); }
   const list = el.querySelector('.mn-list'), pan = el.querySelector('.mn-pan'); let sel = 0; const btns = [];
   const panels = {
     streaks: () => `<h3>STREAKS</h3>${STREAK_INFO.map((s, i) => `<div class="mn-row" style="animation-delay:${i * 60}ms">${ICONS[s.id]}<b>${s.name}<i>${s.at} KILLS · KEY ${s.key}</i></b><span>${s.desc}</span></div>`).join('')}<p style="font-size:12px;opacity:.6">G uses the first one. You lose your streak if you die; surviving the round keeps it.</p>`,
