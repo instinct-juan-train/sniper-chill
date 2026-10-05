@@ -87,7 +87,7 @@ export function createStreaks(ctx) {
   const world = ctx.world || [];
   const listeners = {};
   const emit = (n, d) => { for (const f of (listeners[n] || [])) { try { f(d); } catch (e) { console.error(e); } } for (const f of (listeners['*'] || [])) { try { f(n, d); } catch (e) { console.error(e); } } };
-  const S = { missiles: [], tablet: null, cfg, count: 0, inv: {}, active: null, uav: null, fx: [], strikes: [], shake: 0, enabled: true };
+  const S = { heli: null, missiles: [], tablet: null, cfg, count: 0, inv: {}, active: null, uav: null, fx: [], strikes: [], shake: 0, enabled: true };
   const keys = new Set();
   const mouseDown = { l: false };
   const look = { dx: 0, dy: 0 };
@@ -376,7 +376,7 @@ export function createStreaks(ctx) {
         const off = (s.i - (c.bombs - 1) / 2) * c.spacing, bx = s.tp.x + s.fwd.x * off, bz = s.tp.z + s.fwd.z * off;
         const gy = isFinite(map.getHeight(bx, bz)) ? map.getHeight(bx, bz) : 0;
         const m = new THREE.Mesh(geo.cone, new THREE.MeshLambertMaterial({ color: 0x333a55, flatShading: true })); m.scale.set(0.5, 1.2, 0.5); m.rotation.x = Math.PI; scene.add(m);
-        s.drops.push({ m, x: bx, z: bz, gy, y: gy + 40, t: 0 }); s.i++; play('bomb_beep', { x: bx, y: gy, z: bz });
+        s.drops.push({ m, x: bx, z: bz, gy, y: S.heli ? S.heli.g.position.y - 1.5 : gy + 40, t: 0 }); s.i++; play('bomb_beep', { x: bx, y: gy, z: bz });
       }
       for (let j = s.drops.length - 1; j >= 0; j--) {
         const d = s.drops[j]; d.t += dt; d.y -= (30 + d.t * 60) * dt; d.m.position.set(d.x, d.y, d.z);
@@ -389,12 +389,28 @@ export function createStreaks(ctx) {
 
   // ---------- tablet (airstrike / guided missile): 2D plan map, no live view ----------
   const tabEl = $('.tab'), tabCv = tabEl.querySelector('canvas'), tabTt = tabEl.querySelector('.tt'), tabFt = tabEl.querySelector('.ft');
+
+  const snapCv = document.createElement('canvas'); snapCv.width = 780; snapCv.height = 500; let snapOK = false;
+  function snapshot() {
+    snapOK = false; const R = ctx.renderer; if (!R) return;
+    try {
+      const W = 780, H = 500, B = map.bounds || { minX: -35, maxX: 35, minZ: -35, maxZ: 35 }, sc = Math.min((W - 24) / (B.maxX - B.minX), (H - 24) / (B.maxZ - B.minZ));
+      const cam = new THREE.OrthographicCamera(-W / 2 / sc, W / 2 / sc, H / 2 / sc, -H / 2 / sc, 1, 400); cam.position.set(0, 150, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+      const rt = new THREE.WebGLRenderTarget(W, H); rt.texture.colorSpace = THREE.SRGBColorSpace;
+      const hid = []; for (const b of bots.list) { if (b.group && b.group.visible) { b.group.visible = false; hid.push(b.group); } }
+      const fog = scene.fog; scene.fog = null; const prev = R.getRenderTarget(); 
+      R.setRenderTarget(rt); R.render(scene, cam); const buf = new Uint8Array(W * H * 4); R.readRenderTargetPixels(rt, 0, 0, W, H, buf);
+      R.setRenderTarget(prev); scene.fog = fog; for (const g of hid) g.visible = true; rt.dispose();
+      const img = new ImageData(W, H); for (let y = 0; y < H; y++) { const s = (H - 1 - y) * W * 4; img.data.set(buf.subarray(s, s + W * 4), y * W * 4); }
+      snapCv.getContext('2d').putImageData(img, 0, 0); snapOK = true;
+    } catch (e) { console.warn('snapshot failed', e); snapOK = false; }
+  }
   function openTablet(id) {
     const st = ctrl.state; S.tablet = { id, x: st.position.x - Math.sin(st.yaw) * 14, z: st.position.z - Math.cos(st.yaw) * 14, t: 0, closing: 0, picked: null };
     ctrl.setEnabled(false); if (ctx.vm) ctx.vm.group.visible = false; look.dx = look.dy = 0;
     tabTt.textContent = id === 'missile' ? 'GUIDED MISSILE' : 'AIRSTRIKE';
     tabFt.textContent = 'Move the mouse to aim · Click to call it in · Esc or Q to put the tablet away';
-    tabEl.classList.add('on'); play('ui_click'); emit('takeover', { active: true, kind: 'tablet' });
+    snapshot(); tabEl.classList.add('on'); play('ui_click'); emit('takeover', { active: true, kind: 'tablet' });
   }
   function closeTablet(refund) {
     const T = S.tablet; if (!T) return; tabEl.classList.remove('on'); S.tablet = null;
@@ -406,25 +422,54 @@ export function createStreaks(ctx) {
     const tp = { x: T.x, z: T.z }, ty = isFinite(map.getHeight(tp.x, tp.z)) ? map.getHeight(tp.x, tp.z) : 0; T.closing = 0.42; T.pick = { id, tp, ty };
     tabEl.classList.remove('on'); play('bomb_beep');
   }
+
+  // ---------- support helicopter ----------
+  function makeHeli() {
+    const g = new THREE.Group(), M = (c) => new THREE.MeshToonMaterial({ color: c });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), M(0xff7a9c)); body.scale.set(1, 0.85, 1.7); g.add(body);
+    const cock = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8), M(0x9ad1ff)); cock.position.set(0, 0.35, -1.5); cock.scale.set(1, 0.8, 1); g.add(cock);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 4.2), M(0xff7a9c)); tail.position.set(0, 0.3, 3.8); g.add(tail);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.3, 0.8), M(0xffd166)); fin.position.set(0, 0.9, 5.7); g.add(fin);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.6, 6), M(0x333a55)); mast.position.y = 1.5; g.add(mast);
+    const rotor = new THREE.Group(); rotor.position.y = 1.85; for (let i = 0; i < 2; i++) { const bl = new THREE.Mesh(new THREE.BoxGeometry(9, 0.07, 0.45), M(0xffffff)); bl.rotation.y = i * Math.PI / 2; rotor.add(bl); } g.add(rotor);
+    const tr = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.6, 0.2), M(0xffffff)); tr.position.set(0.3, 0.9, 5.7); g.add(tr);
+    for (const s of [-1, 1]) { const sk = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3.2), M(0x333a55)); sk.position.set(s * 1.1, -1.35, -0.2); g.add(sk); for (const z of [-1, 0.8]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), M(0x333a55)); st.position.set(s * 1.05, -0.9, z); g.add(st); } }
+    g.userData.rotor = rotor; g.userData.tr = tr; return g;
+  }
+  function spawnHeli(tp, fwd, onReady) {
+    const g = makeHeli(), alt = 46; const sx = tp.x - fwd.x * 90, sz = tp.z - fwd.z * 90; g.position.set(sx, alt + 8, sz); g.rotation.y = Math.atan2(-fwd.x, -fwd.z) + Math.PI; scene.add(g);
+    S.heli = { g, t: 0, from: { x: sx, z: sz }, to: { x: tp.x, z: tp.z }, alt, state: 'in', onReady, fwd };
+    play('bomb_beep');
+  }
+  function updateHeli(dt) {
+    const H = S.heli; if (!H) return; H.t += dt; const g = H.g; g.userData.rotor.rotation.y += dt * 40; g.userData.tr.rotation.x += dt * 40;
+    if (H.state === 'in') { const k = Math.min(1, H.t / 1.5), e = 1 - Math.pow(1 - k, 2); g.position.set(H.from.x + (H.to.x - H.from.x) * e, H.alt + 8 * (1 - e), H.from.z + (H.to.z - H.from.z) * e); g.rotation.z = -0.15 * (1 - k); if (k >= 1) { H.state = 'hover'; H.t = 0; H.onReady && H.onReady(g.position); } }
+    else if (H.state === 'hover') { g.position.y = H.alt + Math.sin(H.t * 2) * 0.4; if (H.t > (H.hover || 3.2)) { H.state = 'out'; H.t = 0; } }
+    else { g.position.x += H.fwd.x * dt * 30 * (1 + H.t); g.position.z += H.fwd.z * dt * 30 * (1 + H.t); g.position.y += dt * 8; g.rotation.z = 0.2; if (H.t > 3) { scene.remove(g); S.heli = null; } }
+    S.heliY = H.alt;
+  }
   function launchPick(p) {
-    const st = ctrl.state;
+    const st = ctrl.state; let fx = p.tp.x - st.position.x, fz = p.tp.z - st.position.z; const l = Math.hypot(fx, fz) || 1; const fwd = { x: fx / l, z: fz / l };
+    if (S.heli) { scene.remove(S.heli.g); S.heli = null; }
     if (p.id === 'airstrike') {
-      const c = cfg.airstrike; let fx = p.tp.x - st.position.x, fz = p.tp.z - st.position.z; const l = Math.hypot(fx, fz) || 1; const fwd = { x: fx / l, z: fz / l };
-      marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, 2.2, 0xff5a7a, c.delay + c.bombs * c.interval + 0.8);
-      S.strikes.push({ t: -c.delay, i: 0, tp: { x: p.tp.x, y: p.ty, z: p.tp.z }, fwd, drops: [] });
-      showBanner('Airstrike inbound', 'Target marked on the map. Stay clear of the zone!', 2.4);
+      const c = cfg.airstrike; marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, 2.2, 0xff5a7a, c.delay + c.bombs * c.interval + 3.5);
+      showBanner('Helicopter inbound', 'Airstrike target marked. Stay clear of the zone!', 2.6);
+      spawnHeli({ x: p.tp.x - fwd.x * (c.bombs * c.spacing) / 2, z: p.tp.z - fwd.z * (c.bombs * c.spacing) / 2 }, fwd, () => { S.strikes.push({ t: -0.4, i: 0, tp: { x: p.tp.x, y: p.ty, z: p.tp.z }, fwd, drops: [], fromHeli: true }); });
+      if (S.heli) S.heli.hover = c.bombs * c.interval + 1.8;
     } else {
-      const c = cfg.missile; marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, c.blastRadius * 0.5, 0xff5a7a, 3.2);
-      const m = new THREE.Mesh(geo.cone, new THREE.MeshLambertMaterial({ color: 0xff6b6b, flatShading: true })); m.scale.set(0.7, 2.4, 0.7); m.rotation.x = Math.PI; scene.add(m);
-      S.missiles.push({ m, x: p.tp.x, z: p.tp.z, gy: p.ty, y: p.ty + c.startHeight, t: 0 });
-      showBanner('Missile launched', 'Impact in a few seconds. Get clear!', 2.4);
+      const c = cfg.missile; marker({ x: p.tp.x, y: p.ty, z: p.tp.z }, c.blastRadius * 0.5, 0xff5a7a, 6);
+      showBanner('Helicopter inbound', 'Missile target marked. Get clear!', 2.6);
+      spawnHeli({ x: p.tp.x - fwd.x * 14, z: p.tp.z - fwd.z * 14 }, fwd, (pos) => {
+        const m = new THREE.Mesh(geo.cone, new THREE.MeshLambertMaterial({ color: 0xff6b6b, flatShading: true })); m.scale.set(0.7, 2.4, 0.7); m.rotation.x = Math.PI; scene.add(m);
+        S.missiles.push({ m, x: pos.x, z: pos.z, tx: p.tp.x, tz: p.tp.z, gy: p.ty, y: pos.y - 1.5, y0: pos.y - 1.5, t: 0 }); play('bomb_beep');
+      }); if (S.heli) S.heli.hover = 2.4;
     }
     play('bomb_beep'); emit('called', { id: p.id, target: { x: p.tp.x, z: p.tp.z } }); refreshHud();
   }
   function updateMissiles(dt) {
     const c = cfg.missile;
     for (let k = S.missiles.length - 1; k >= 0; k--) {
-      const d = S.missiles[k]; d.t += dt; d.y -= (50 + d.t * 70) * dt; d.m.position.set(d.x, d.y, d.z);
+      const d = S.missiles[k]; d.t += dt; d.y -= (22 + d.t * 55) * dt; const kk = mm(1 - (d.y - d.gy) / Math.max(1, d.y0 - d.gy), 0, 1); d.x += (d.tx - d.x) * Math.min(1, dt * 3); d.z += (d.tz - d.z) * Math.min(1, dt * 3); d.m.position.set(d.x, d.y, d.z); d.m.rotation.z = (d.tx - d.x) * 0.02;
       if (d.y <= d.gy + 0.3) { scene.remove(d.m); S.missiles.splice(k, 1); S.shake = Math.max(S.shake, 2); explode({ x: d.x, y: d.gy + 0.4, z: d.z }, { radius: c.blastRadius, maxDamage: c.maxDamage, minDamage: c.minDamage, source: 'missile', alert: c.alertBots }); emit('ended', { id: 'missile', reason: 'detonated' }); }
     }
   }
@@ -434,15 +479,12 @@ export function createStreaks(ctx) {
     const X = (x) => ox + x * sc, Z = (z) => oz + z * sc;
     // cursor from mouse deltas
     T.x = mm(T.x + look.dx * 0.12 / (sc / 6), B.minX, B.maxX); T.z = mm(T.z + look.dy * 0.12 / (sc / 6), B.minZ, B.maxZ); look.dx = look.dy = 0;
-    c.clearRect(0, 0, W, H); c.fillStyle = '#d8efdc'; c.fillRect(0, 0, W, H);
-    c.fillStyle = '#c6e4cf'; c.fillRect(X(B.minX), Z(B.minZ), (B.maxX - B.minX) * sc, (B.maxZ - B.minZ) * sc);
-    c.strokeStyle = 'rgba(40,60,90,.14)'; c.lineWidth = 1; for (let g = Math.ceil(B.minX / 10) * 10; g <= B.maxX; g += 10) { c.beginPath(); c.moveTo(X(g), Z(B.minZ)); c.lineTo(X(g), Z(B.maxZ)); c.stroke(); } for (let g = Math.ceil(B.minZ / 10) * 10; g <= B.maxZ; g += 10) { c.beginPath(); c.moveTo(X(B.minX), Z(g)); c.lineTo(X(B.maxX), Z(g)); c.stroke(); }
-    const pal = ['#f4a6b8', '#ffd18a', '#a8d8f0', '#c3b4f0', '#ffb98a'];
-    let n = 0; for (const b of (map.colliders || [])) { if (b.max.y - b.min.y < 0.8) continue; const w = (b.max.x - b.min.x) * sc, d = (b.max.z - b.min.z) * sc; if (w < 1.5 && d < 1.5) continue; c.fillStyle = pal[(n++) % pal.length]; c.fillRect(X(b.min.x), Z(b.min.z), w, d); c.strokeStyle = 'rgba(40,40,80,.55)'; c.lineWidth = 1.2; c.strokeRect(X(b.min.x), Z(b.min.z), w, d); }
+    c.clearRect(0, 0, W, H); if (snapOK) { c.drawImage(snapCv, 0, 0); c.fillStyle = 'rgba(20,40,70,.12)'; c.fillRect(0, 0, W, H); } else { c.fillStyle = '#c6e4cf'; c.fillRect(0, 0, W, H); }
+    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 1; for (let g = Math.ceil(B.minX / 10) * 10; g <= B.maxX; g += 10) { c.beginPath(); c.moveTo(X(g), Z(B.minZ)); c.lineTo(X(g), Z(B.maxZ)); c.stroke(); } for (let g = Math.ceil(B.minZ / 10) * 10; g <= B.maxZ; g += 10) { c.beginPath(); c.moveTo(X(B.minX), Z(g)); c.lineTo(X(B.maxX), Z(g)); c.stroke(); }
     c.font = '700 13px Fredoka,system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     const arr = (v) => Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.entries(v).map(([k, o]) => (o && o.name === undefined ? { name: k, ...o } : o)) : []);
     for (const s of arr(map.bombsites)) { const p = s.position || s.center || s; const x = p.x, z = p.z !== undefined ? p.z : p.y; if (x === undefined) continue; c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(X(x), Z(z), 16, 0, 6.283); c.fill(); c.fillStyle = '#333'; c.font = '800 18px Fredoka,system-ui'; c.fillText(String(s.name || s.id || '?').slice(0, 1).toUpperCase(), X(x), Z(z) + 1); }
-    c.font = '700 11px Fredoka,system-ui'; for (const co of arr(map.callouts)) { const p = co.position || co; if (p.x === undefined) continue; c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.9)'; c.strokeText(co.name, X(p.x), Z(p.z)); c.fillStyle = '#2a3560'; c.fillText(co.name, X(p.x), Z(p.z)); }
+    c.font = '700 11px Fredoka,system-ui'; for (const co of arr(map.callouts)) { const p = co.position || co; if (p.x === undefined) continue; c.lineWidth = 3.5; c.strokeStyle = 'rgba(20,30,60,.85)'; c.strokeText(co.name, X(p.x), Z(p.z)); c.fillStyle = '#fff'; c.fillText(co.name, X(p.x), Z(p.z)); }
     // player
     c.save(); c.translate(X(st.position.x), Z(st.position.z)); c.rotate(-st.yaw); c.fillStyle = '#2ee6a0'; c.strokeStyle = '#0b3'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 8); c.lineTo(0, 4); c.lineTo(-8, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
     c.fillStyle = '#1a7f55'; c.font = '800 11px Fredoka,system-ui'; c.fillText('YOU', X(st.position.x), Z(st.position.z) + 20);
@@ -466,7 +508,7 @@ export function createStreaks(ctx) {
   }
   function cancel(reason = 'cancel') {
     if (S.tablet) { closeTablet(reason === 'cancel'); }
-    for (const d of S.missiles) scene.remove(d.m); S.missiles.length = 0;
+    for (const d of S.missiles) scene.remove(d.m); S.missiles.length = 0; if (S.heli) { scene.remove(S.heli.g); S.heli = null; }
     if (S.active) { const k = S.active.id; if (S.active.mesh) scene.remove(S.active.mesh); if (S.active.ring) scene.remove(S.active.ring); endControl(k, reason); }
     if (S.finish) { S.finish = null; S.cam = null; endControl(S.finishKind || 'unknown', reason); }
     stopUav(reason);
@@ -479,7 +521,7 @@ export function createStreaks(ctx) {
     if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) banner.classList.remove('on'); }
     for (let i = S.fx.length - 1; i >= 0; i--) { const f = S.fx[i]; f.t += dt; const k = Math.min(1, f.t / f.life); f.fn(k, dt); if (k >= 1) { scene.remove(f.obj); S.fx.splice(i, 1); } }
     if (S.uav) updateUav(dt);
-    updateStrikes(dt); updateMissiles(dt);
+    updateStrikes(dt); updateMissiles(dt); updateHeli(dt);
     if (S.tablet) { drawTablet(dt); if (S.tablet && S.tablet.closing) { S.tablet.closing -= dt; if (S.tablet.closing <= 0) { const p = S.tablet.pick; closeTablet(false); launchPick(p); } } }
     if (S.active) {
       ctrl.setEnabled(false); S.finishKind = S.active.id;

@@ -102,7 +102,7 @@ export class Game {
       groundAt: (x, z, y) => { const h = this.map.getHeight(x, z); return isFinite(h) ? h : y; },
       raycastWorld: (o, d, max) => { const h = raycast(o, d, { colliders: this.world, maxDistance: max }); return h && h.kind === 'world' ? { point: h.point, normal: h.normal } : null; } });
     this.killfx.config.slowmo = false; // killcam owns time; only last-enemy kills get the cinematic
-    this.streaks = createStreaks({ THREE, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
+    this.streaks = createStreaks({ THREE, renderer: this.renderer, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
       isPlaying: () => this.state === 'play',
       onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Streak kill +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
     this.streaks.on('explosion', ({ position, radius, source }) => this.destruction.damage(position, radius, source === 'rc' ? 150 : 200, { source }));
