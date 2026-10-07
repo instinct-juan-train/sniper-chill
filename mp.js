@@ -351,7 +351,7 @@ export function createMultiplayer(game, THREE) {
     const sw = WEAPON_ORDER[net.me.weapon];
     if (!g.knifeOn && g.ws.current === sw && WEAPONS[sw] && net.me.mag != null)
       g.hud.setAmmo(net.me.mag, net.me.res, WEAPONS[sw].name, net.me.rl > 0);
-    try { mp.fx && mp.fx.update(dt); } catch (e) {}
+    try { mp.fx && mp.fx.update(game._real || dt); } catch (e) {}
     const dsc = mp.fx && mp.fx.score();
     if (dsc) { const key = 'dm' + dsc.p + ':' + dsc.b + ':' + dsc.label; if (mp._sk !== key) { mp._sk = key; g.match = { p: dsc.p, b: dsc.b, round: 0, dm: dsc.label }; g.renderSB(); } }
     else try { const my = { T: 0, CT: 1, Z: 2 }[net.team] ?? 1, oth = net.mode === 'ffa3' ? Math.max(...net.score.filter((_, i) => i !== my).map((v) => v | 0)) : net.score[1 - my], key = net.score[my] + ':' + oth + ':' + net.round;
