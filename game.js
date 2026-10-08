@@ -14,7 +14,7 @@ import { createAnimations } from './animations.js';
 import { createKillFX } from './killfx.js';
 import { getContext } from './audio.js';
 import { DIFFICULTY } from './botsai.js';
-import { createStreaks } from './streaks.js';
+import { createStreaks } from './streaks.js?v=1007i-final';
 import { addDecor } from './decor.js';
 import { addAds } from './ads.js';
 import { recordRound } from './stats.js';
@@ -26,11 +26,13 @@ import { createGrenades, chargeOf } from './grenades.js';
 import { playIntro } from './intro.js';
 import { loadingStart, loadingStep } from './loading.js';
 import { buildMenu } from './menu.js';
-import { createMultiplayer } from './mp.js';
+import { createMultiplayer } from './mp.js?v=1007i-final';
 import { parkourColliders, parkourMeshes } from './parkour.js';
 import { showTutorial } from './tutorial.js';
 import { createCharacter, ROSTER } from './characters.js';
 import { createPortals } from './portal.js';
+import { createPerformancePanel } from './performance.js?v=1007i-final';
+import { createAnnouncer } from './announcer.js';
 
 const CSS = `
 @font-face{font-family:Fredoka;font-weight:500;src:url('./Fredoka-Medium.ttf') format('truetype');font-display:swap}
@@ -128,7 +130,7 @@ export class Game {
     this.killfx.config.slowmo = false; // killcam owns time; only last-enemy kills get the cinematic
     this.streaks = createStreaks({ THREE, renderer: this.renderer, scene: this.scene, camera: this.camera, root, ctrl: this.ctrl, bots: this.bots, map: m, world: this.world, raycast, play, vm: this.vm,
       isPlaying: () => this.state === 'play',
-      damageBot: (b, amount, meta) => { if (this.mp && this.mp.active) { this.mp.xdmg(b, amount); return false; } const hp = b.health; this.bots.damage(b, Math.max(0, hp - amount), false); this.killfx.damageText({x:b.position.x,y:b.position.y+1.2,z:b.position.z}, hp-b.health); return !b.alive; },
+      damageBot: (b, amount, meta) => { if (this.mp && this.mp.active) { if (meta?.source !== 'missile') this.mp.xdmg(b, amount); return false; } const hp = b.health; this.bots.damage(b, Math.max(0, hp - amount), false); this.killfx.damageText({x:b.position.x,y:b.position.y+1.2,z:b.position.z}, hp-b.health); return !b.alive; },
       onKill: ({ bot }) => { this.kills++; this.score += 100; this.kf.textContent = 'Streak kill +100'; this.kfT = 1.5; this.hud.hitMarker(true, false); play('kill'); } });
     this.streaks.on('earned', () => play('streak_earned')); this.streaks.on('called', ({ id }) => play(id === 'nuke' ? 'nuke' : 'streak_call'));
     this.streaks.on('explosion', ({ position, radius, source }) => this.destruction.damage(position, radius, source === 'rc' ? 150 : 200, { source }));
@@ -149,7 +151,8 @@ export class Game {
     this.hint = document.createElement('div'); this.hint.style.cssText = 'position:absolute;right:200px;bottom:34px;z-index:21;font-weight:800;font-size:18px;text-shadow:0 2px 4px #000;pointer-events:none'; root.appendChild(this.hint);
     this.sb = document.createElement('div'); this.sb.className = 'scb'; this.sb.style.display = 'none'; root.appendChild(this.sb); this.sbm = document.createElement('div'); this.sbm.className = 'sbm'; this.sbm.style.display = 'none'; root.appendChild(this.sbm);
     this.match = { p: 0, b: 0, round: 1, over: false };
-    this.perf = document.createElement('div'); this.perf.style.cssText = 'position:absolute;left:8px;top:8px;z-index:200;font:700 10px/1 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;pointer-events:none'; this.perf.style.whiteSpace = 'pre-line'; this.perf.style.lineHeight = '1.5'; this.perf.style.top = '224px'; this.perf.textContent = '-- FPS'; root.appendChild(this.perf); this.pf = { n: 0, t: 0, worst: 0 };
+    this.localAnnouncer = createAnnouncer({volume: () => this.set?.sfxOn === false ? 0 : (this.set?.vol ?? 0.7)});
+    this.perfPanel = createPerformancePanel(root); this.perf = this.perfPanel.el; this.pf = { n: 0, t: 0, worst: 0 };
     this.setOv = document.createElement('div'); this.setOv.className = 'setov'; this.setOv.style.display = 'none'; root.appendChild(this.setOv);
     this.invb = document.createElement('div'); this.invb.className = 'invb'; this.invb.style.display = 'none'; root.appendChild(this.invb); this.invh = document.createElement('div'); this.invh.className = 'invh'; root.appendChild(this.invh); this.invSig = '';
     this.knifeOn = false; this.knifeCd = 0; this.slashT = -1; this.makeKnife();
@@ -291,7 +294,7 @@ export class Game {
     if (!this.eco.consumeGrenade(type)) return;   // fires the 'grenade' event (multiplayer relays it to the server)
     this.grenades.throwGrenade(type, { position: this.ctrl.state.eye, direction: this.ctrl.getDirection(), charge, owner: 'player', team: s.team, consume: false });
     play('grenade_throw');
-    try { this.mp?.fx?.an.say('Fire in the hole!', 2.5); } catch (e) {}
+    try { (this.mp?.active ? this.mp.fx?.an : this.localAnnouncer)?.say('Fire in the hole!', 2.5); } catch (e) {}
   }
   endMatchEffects(id) { this.destruction.reset(id); this.grenades.reset(id); }
   onWeaponEvent(n, d) {
@@ -457,11 +460,13 @@ export class Game {
     const st = this.ctrl.state, o = { x: st.eye.x, y: st.eye.y, z: st.eye.z }, muzzle = new THREE.Vector3();
     this.vm.muzzleWorldPosition(muzzle);
     if (shots.length && this.bots.noise) this.bots.noise(o.x, o.z, 34);
+    const mpLive = !!(this.mp && this.mp.active), targets = mpLive ? this.mp.targets() : this.bots.list;   // multiplayer: enemies only, alive, no spawn protection (what the server will accept)
     for (const s of shots) {
       if (WEAPON_STATS[s.weapon]?.projectile) { play('grenade_throw'); continue; } // authoritative projectile event draws flight and explosion
+      if (mpLive) this.mp.shot(s);   // the server fires this exact offset at this exact view tick (see net.shot)
       const yaw = st.yaw + s.dir.x, pit = st.pitch + s.dir.y, cp = Math.cos(pit);
       const dir = { x: -Math.sin(yaw) * cp, y: Math.sin(pit), z: -Math.cos(yaw) * cp };
-      let hit = raycast(o, dir, { colliders: this.world, targets: this.bots.list, maxDistance: s.range });
+      let hit = raycast(o, dir, { colliders: this.world, targets, maxDistance: s.range });
       if (hit && hit.kind === 'target' && wallBlocked(o, dir, hit.distance, this.world, 0.07)) hit = raycast(o, dir, { colliders: this.world, maxDistance: s.range }); // grazing a corner: wall wins
       else if (hit && hit.kind === 'target') { const mz = { x: muzzle.x - o.x, y: muzzle.y - o.y, z: muzzle.z - o.z }, ml = Math.hypot(mz.x, mz.y, mz.z); if (ml > 0.05 && ml < 2 && wallBlocked(o, mz, ml + 0.02, this.world, 0.02)) hit = raycast(o, dir, { colliders: this.world, maxDistance: s.range }); } // gun poking through a wall
       const end = hit ? hit.point : { x: o.x + dir.x * s.range, y: o.y + dir.y * s.range, z: o.z + dir.z * s.range };
@@ -580,7 +585,7 @@ export class Game {
   }
   loop(now) {
     if (!this.running) return; requestAnimationFrame(this.loop);
-    { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; if (fr > p.worst) p.worst = fr; if (p.t >= 500) { const net = this.mp?.active ? this.mp.net : null; const sp = net?.serverPerf; this.perf.textContent = Math.round(p.n * 1000 / p.t) + ' FPS · FRAME ' + Math.round(p.t / p.n) + ' ms (max ' + Math.round(p.worst) + ')\n' + (net ? 'PING (RTT) ' + (net.hasPing ? Math.round(net.rttMs) + ' ms' : '--') + '\nSERVER tick ' + (sp ? sp[0] + ' ms · pause (5s) ' + sp[1] + ' ms' : '--') : 'PING / SERVER: offline'); p.n = 0; p.t = 0; p.worst = 0; } }
+    { const fr = now - this.last; const p = this.pf; p.n++; p.t += fr; p.worst = Math.max(p.worst, fr); if (p.t >= 500) { this.perfPanel.update({now,fps:p.n*1000/p.t,frame:p.t/p.n,worst:p.worst,net:this.mp?.active?this.mp.net:null,visible:!!this.set.fps && this.state !== 'menu' && this.state !== 'pause' && !window.__pauseOpen && this.setOv.style.display === 'none' && !(this.eco && this.eco.getState().menuOpen)}); p.n=0;p.t=0;p.worst=0; } }
     const real = Math.min(0.05, (now - this.last) / 1000); this.last = now;
     const dt = real * this.kc.update(real) * this.killfx.update(real) * (this.deathCam ? 0.35 : 1);
     this._real = Math.min(.25,(now-(this._netClock||now))/1000);this._netClock=now;this.adaptQuality();
@@ -595,5 +600,5 @@ export class Game {
     if (this.look) this.look.render(this.camera); else this.renderer.render(this.scene, this.camera);
     this.kc.afterRender();
   }
-  destroy() { this.running = false; this.ro && this.ro.disconnect(); this.ctrl.dispose(); this.renderer.dispose(); }
-}
+  destroy() { this.running = false; this.localAnnouncer?.dispose(); this.ro && this.ro.disconnect(); this.ctrl.dispose(); this.renderer.dispose(); }
+                                                                                                                                             }
