@@ -3,7 +3,7 @@ export const TICK = 30;                 // server simulation rate (Hz); client i
 export const DT = 1 / TICK;
 export const SNAP_DIV = 1;              // snapshot every tick -> 30 Hz (~8 kB/s per client)
 export const MAX_PLAYERS = 12;
-export const REWIND_TICKS = 10;         // lag compensation window (~333 ms)
+export const REWIND_TICKS = 15;         // lag compensation window (500 ms): one-way latency + 100 ms interpolation + host stalls (Render free tier: 200-400 ms event-loop pauses measured 2026-10-07)
 export const HIST_TICKS = 32;
 export const SENS = 0.0022;             // must equal movement.js default sensitivity
 export const WEAPON_IDS = ['pistol', 'machinegun', 'sniper', 'thunderpop', 'fizztwin', 'buzzbox', 'bigpuff', 'partypopper', 'breeze', 'taptap', 'skyneedle', 'bazooka', 'grenadelauncher']; // append only (network index)
@@ -22,8 +22,8 @@ export const DM = {
   gun: { name: 'Gun Game', short: 'GUN GAME', limit: 0, time: 480, teams: 0 },
 };
 export const RESPAWN = 2, DM_FREEZE = 3, DM_PROTECT = 1.5, DM_END = 26;   // match end: final killcam (~9 s) + MVP screen
-// Gun Game ladder: rifles first, pistols last, the knife kill wins. Index = level.
-export const GUN_ORDER = ['machinegun', 'breeze', 'taptap', 'partypopper', 'buzzbox', 'bigpuff', 'skyneedle', 'sniper', 'thunderpop', 'fizztwin', 'pistol', 'knife'];
+// Gun Game ladder: rifles first, pistols, then bazooka, the knife kill wins. Index = level.
+export const GUN_ORDER = ['machinegun', 'breeze', 'taptap', 'partypopper', 'buzzbox', 'bigpuff', 'skyneedle', 'sniper', 'thunderpop', 'fizztwin', 'pistol', 'bazooka', 'knife'];
 // Silicon Valley legends (Juan 2026-10-06): every player gets one at random when they join (server-picked, so everybody
 // sees the same person); bots are named after theirs. Models in characters.js, same toon style as the original cast.
 export const LEGENDS = [
